@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — PlacementAI{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Welcome back, {{ session.get('fullname') }}! 🎯{% endblock %}
+
+{% block extra_css %}
+<style>
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px; position: relative; overflow: hidden;
+  }
+  .stat-card::after {
+    content: ''; position: absolute; top: -24px; right: -24px;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: rgba(108,99,255,.07);
+  }
+  .stat-value { font-size: 30px; font-weight: 800; margin: 6px 0 2px; }
+  .stat-label { color: var(--text-muted); font-size: 13px; }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  .feat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px; cursor: pointer;
+    transition: all .2s; display: block; color: var(--text);
+  }
+  .feat-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(108,99,255,.14); }
+  .feat-icon { width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; font-size: 17px; }
+
+  .activity-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .activity-item:last-child { border-bottom: none; }
+
+  @media (max-width: 900px) { .feature-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- ── Stats row ── -->
+<div class="grid-4" style="margin-bottom:24px">
+  <div class="stat-card">
+    <i class="fas fa-chart-line" style="color:var(--primary);font-size:18px"></i>
+    <div class="stat-value" style="color:var(--primary)">{{ stats.placement_probability }}%</div>
+    <div class="stat-label">Placement Probability</div>
+  </div>
+  <div class="stat-card">
+    <i class="fas fa-file-alt" style="color:var(--success);font-size:18px"></i>
+    <div class="stat-value" style="color:var(--success)">{{ stats.resume_score }}</div>
+    <div class="stat-label">Resume ATS Score</div>
+  </div>
+  <div class="stat-card">
+    <i class="fas fa-puzzle-piece" style="color:var(--warning);font-size:18px"></i>
+    <div class="stat-value" style="color:var(--warning)">{{ stats.skills_count }}</div>
+    <div class="stat-label">Skills Tracked</div>
+  </div>
+  <div class="stat-card">
+    <i class="fas fa-microphone" style="color:var(--secondary);font-size:18px"></i>
+    <div class="stat-value" style="color:var(--secondary)">{{ stats.interview_sessions }}</div>
+    <div class="stat-label">Mock Interviews</div>
+  </div>
+</div>
+
+<!-- ── Body grid ── -->
+<div class="grid-2">
+  <!-- Feature cards -->
+  <div>
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">🚀 AI-Powered Tools</h3>
+    <div class="feature-grid">
+      {% set tools = [
+        ('/placement-predictor','fas fa-chart-line','Placement Predictor','Know your chances',   'linear-gradient(135deg,#6c63ff,#8b83ff)'),
+        ('/skill-gap',           'fas fa-puzzle-piece','Skill Gap Analyzer','Find what is missing','linear-gradient(135deg,#f64f59,#fc8c6a)'),
+        ('/interview-simulator', 'fas fa-microphone',  'Interview Simulator','Practice with AI',   'linear-gradient(135deg,#11998e,#38ef7d)'),
+        ('/resume-ats',          'fas fa-file-alt',    'Resume ATS','Score your resume',           'linear-gradient(135deg,#fc4a1a,#f7b733)'),
+        ('/company-predictor',   'fas fa-building',    'Company Predictor','Best-fit companies',   'linear-gradient(135deg,#8360c3,#2ebf91)'),
+        ('/learning-path',       'fas fa-road',        'Learning Path','Personalised roadmap',     'linear-gradient(135deg,#0099f7,#f11712)'),
+        ('/project-evaluator',   'fas fa-code',        'Project Evaluator','AI project review',    'linear-gradient(135deg,#f953c6,#b91d73)'),
+        ('/trend-analysis',      'fas fa-fire',        'Trend Analysis','2025 market trends',      'linear-gradient(135deg,#f7971e,#ffd200)'),
+        ('/career-mentor',       'fas fa-user-tie',    'Career Mentor','24/7 AI guidance',         'linear-gradient(135deg,#43cea2,#185a9d)'),
+      ] %}
+      {% for url, icon, title, desc, grad in tools %}
+      <a href="{{ url }}" class="feat-card">
+        <div class="feat-icon" style="background:{{ grad }}">
+          <i class="{{ icon }}" style="color:#fff"></i>
+        </div>
+        <div style="font-weight:600;font-size:13.5px;margin-bottom:2px">{{ title }}</div>
+        <div style="font-size:12px;color:var(--text-muted)">{{ desc }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div>
+    <!-- Recent activity -->
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">📋 Recent Activity</h3>
+    <div class="card" style="margin-bottom:16px">
+      {% if activity %}
+        {% for item in activity %}
+        <div class="activity-item">
+          <div style="width:36px;height:36px;border-radius:10px;background:rgba(108,99,255,.14);
+                      display:flex;align-items:center;justify-content:center;
+                      color:var(--primary);flex-shrink:0">
+            <i class="fas fa-bolt"></i>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;font-weight:500">{{ item.action }}</div>
+            <div style="font-size:12px;color:var(--text-muted)">{{ item.detail }}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);flex-shrink:0">
+            {{ item.created_at.strftime('%b %d') }}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center;padding:40px;color:var(--text-muted)">
+          <i class="fas fa-rocket" style="font-size:32px;display:block;margin-bottom:10px;opacity:.25"></i>
+          No activity yet — pick a tool above to get started!
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Tip card -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(108,99,255,.08),rgba(246,79,89,.06));
+                              border-color:rgba(108,99,255,.25)">
+      <div style="font-weight:600;margin-bottom:8px">💡 Quick Tip</div>
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.7">
+        Start with the
+        <a href="/placement-predictor"><strong>Placement Predictor</strong></a>
+        to get a baseline score, then use the
+        <a href="/skill-gap"><strong>Skill Gap Analyzer</strong></a>
+        to build a targeted study plan.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

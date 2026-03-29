@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PlacementAI{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary:    #6c63ff;
+      --secondary:  #f64f59;
+      --bg:         #0f0f1a;
+      --surface:    #1a1a2e;
+      --surface2:   #16213e;
+      --text:       #e8e8f0;
+      --text-muted: #8888aa;
+      --border:     #2a2a4a;
+      --success:    #00d084;
+      --warning:    #ffd166;
+      --error:      #ef476f;
+      --gradient:   linear-gradient(135deg, #6c63ff, #f64f59);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--primary); text-decoration: none; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: 10px; border: none;
+      cursor: pointer; font-weight: 600; font-size: 14px;
+      font-family: 'Inter', sans-serif; transition: all .2s;
+    }
+    .btn-primary { background: var(--gradient); color: #fff; }
+    .btn-primary:hover { opacity: .88; transform: translateY(-1px); box-shadow: 0 8px 25px rgba(108,99,255,.4); }
+    .btn-block { width: 100%; justify-content: center; padding: 14px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: var(--text-muted); }
+    .form-control {
+      width: 100%; padding: 12px 16px;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px;
+      font-family: 'Inter', sans-serif; transition: border-color .2s;
+    }
+    .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(108,99,255,.12); }
+    .form-control::placeholder { color: var(--text-muted); }
+
+    .alert { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+    .alert-danger  { background: rgba(239,71,111,.12);  border: 1px solid rgba(239,71,111,.3);  color: var(--error); }
+    .alert-success { background: rgba(0,208,132,.12);   border: 1px solid rgba(0,208,132,.3);   color: var(--success); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  {% block content %}{% endblock %}
+</body>
+</html>

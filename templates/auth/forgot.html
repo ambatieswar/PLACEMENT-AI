@@ -1,0 +1,183 @@
+{% extends 'auth_base.html' %}
+{% block title %}Reset Password — PlacementAI{% endblock %}
+
+{% block extra_css %}
+<style>
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 20px;
+  }
+  .auth-box {
+    width: 100%; max-width: 460px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 40px;
+  }
+  .steps { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; }
+  .step {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    border: 2px solid var(--border); color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .step.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .step.done   { background: var(--success); border-color: var(--success); color: #fff; }
+  .step-line { flex: 1; height: 2px; background: var(--border); }
+  .otp-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; margin-bottom: 20px; }
+  .otp-input {
+    text-align: center; font-size: 22px; font-weight: 700;
+    padding: 13px 6px; background: var(--surface2);
+    border: 2px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: 'Inter', sans-serif;
+    transition: border-color .2s;
+  }
+  .otp-input:focus { outline: none; border-color: var(--primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-box">
+
+    <a href="/login" style="font-size:13px;color:var(--text-muted);
+       display:inline-flex;align-items:center;gap:6px;margin-bottom:24px">
+      <i class="fas fa-arrow-left"></i> Back to sign in
+    </a>
+
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px">Reset Password</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:24px">
+      We'll send a one-time code to verify your identity.
+    </p>
+
+    <!-- Step indicator -->
+    <div class="steps">
+      <div class="step {% if step > 1 %}done{% elif step == 1 %}active{% endif %}">
+        {% if step > 1 %}<i class="fas fa-check"></i>{% else %}1{% endif %}
+      </div>
+      <div class="step-line"></div>
+      <div class="step {% if step > 2 %}done{% elif step == 2 %}active{% endif %}">
+        {% if step > 2 %}<i class="fas fa-check"></i>{% else %}2{% endif %}
+      </div>
+      <div class="step-line"></div>
+      <div class="step {% if step == 3 %}active{% endif %}">3</div>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">
+          <i class="fas fa-info-circle"></i> {{ msg }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- ── Step 1 : enter email ── -->
+    {% if step == 1 %}
+    <form method="POST" action="/forgot-password">
+      <input type="hidden" name="step" value="1">
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address</label>
+        <input
+          type="email" id="email" name="email"
+          class="form-control" placeholder="your@email.com"
+          required autofocus
+        >
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px">
+        <i class="fas fa-info-circle" style="margin-right:6px;color:var(--primary)"></i>
+        A 6-digit OTP will be sent via Gmail SMTP.
+      </p>
+      <button type="submit" class="btn btn-primary btn-block">
+        Send OTP &nbsp;<i class="fas fa-paper-plane"></i>
+      </button>
+    </form>
+
+    <!-- ── Step 2 : enter OTP ── -->
+    {% elif step == 2 %}
+    <form method="POST" action="/forgot-password" id="otpForm">
+      <input type="hidden" name="step"  value="2">
+      <input type="hidden" name="email" value="{{ email }}">
+
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:16px">
+        OTP sent to <strong style="color:var(--text)">{{ email }}</strong>
+      </p>
+
+      <div class="otp-grid">
+        {% for i in range(6) %}
+        <input
+          class="otp-input" id="otp{{ i }}"
+          type="text" maxlength="1" inputmode="numeric"
+          pattern="[0-9]"
+        >
+        {% endfor %}
+      </div>
+      <input type="hidden" name="otp" id="otpHidden">
+
+      <button
+        type="submit" class="btn btn-primary btn-block"
+        onclick="combineOTP(event)"
+      >
+        Verify OTP &nbsp;<i class="fas fa-check"></i>
+      </button>
+    </form>
+
+    <script>
+      // Auto-advance and combine digits
+      (function () {
+        for (var i = 0; i < 6; i++) {
+          (function (idx) {
+            document.getElementById('otp' + idx).addEventListener('input', function () {
+              this.value = this.value.replace(/\D/g, '').slice(-1);
+              if (this.value && idx < 5)
+                document.getElementById('otp' + (idx + 1)).focus();
+            });
+            document.getElementById('otp' + idx).addEventListener('keydown', function (e) {
+              if (e.key === 'Backspace' && !this.value && idx > 0)
+                document.getElementById('otp' + (idx - 1)).focus();
+            });
+          })(i);
+        }
+      })();
+
+      function combineOTP(e) {
+        var v = '';
+        for (var i = 0; i < 6; i++) v += document.getElementById('otp' + i).value;
+        if (v.length < 6) { e.preventDefault(); alert('Please enter the full 6-digit OTP.'); return; }
+        document.getElementById('otpHidden').value = v;
+      }
+    </script>
+
+    <!-- ── Step 3 : new password ── -->
+    {% elif step == 3 %}
+    <form method="POST" action="/forgot-password">
+      <input type="hidden" name="step"  value="3">
+      <input type="hidden" name="email" value="{{ email }}">
+      <input type="hidden" name="otp"   value="{{ otp }}">
+
+      <div class="form-group">
+        <label class="form-label" for="new_password">New Password</label>
+        <input
+          type="password" id="new_password" name="new_password"
+          class="form-control" placeholder="Min 8 characters"
+          required minlength="8" autofocus
+        >
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="confirm_password">Confirm New Password</label>
+        <input
+          type="password" id="confirm_password" name="confirm_password"
+          class="form-control" placeholder="Re-enter new password"
+          required minlength="8"
+        >
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">
+        Reset Password &nbsp;<i class="fas fa-lock"></i>
+      </button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,479 @@
+{% extends 'base.html' %}
+{% block title %}Interview Simulator — PlacementAI{% endblock %}
+{% block page_title %}AI Interview Simulator{% endblock %}
+{% block page_subtitle %}Real-time AI interviews with voice recognition & deep reasoning analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes ripple {
+    0%   { transform: scale(1);   opacity: .6; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes pulse-mic {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,59,48,.4); }
+    50%       { box-shadow: 0 0 0 12px rgba(255,59,48,0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .answer-row { display: flex; gap: 10px; align-items: flex-end; }
+  .voice-btn {
+    position: relative; width: 46px; height: 46px; border-radius: 50%;
+    background: var(--bg); border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px; transition: all .2s; flex-shrink: 0;
+    color: var(--text-muted);
+  }
+  .voice-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+  .voice-btn.recording {
+    background: var(--error); border-color: var(--error); color: #fff;
+    animation: pulse-mic 1.2s ease infinite;
+  }
+  .voice-badge {
+    display: none; align-items: center; gap: 8px; padding: 8px 14px;
+    background: rgba(255,59,48,.08); border: 1px solid rgba(255,59,48,.2);
+    border-radius: 980px; font-size: 12px; color: var(--error); margin-top: 6px;
+  }
+  .voice-badge.active { display: flex; }
+  .voice-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--error);
+    animation: pulse-mic .8s infinite;
+  }
+  .tts-btn {
+    background: none; border: 1px solid var(--border); border-radius: 980px;
+    padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--text-muted);
+    transition: all .15s; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .tts-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .chat-msg.ai .msg-tools { display: flex; gap: 6px; margin-top: 8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Setup panel ── -->
+<div id="setupPanel">
+  <div class="card" style="max-width:620px;margin:0 auto">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-microphone" style="color:var(--primary);margin-right:8px"></i>Configure Your Interview
+    </h3>
+
+    <div class="form-group">
+      <label class="form-label">Target Company</label>
+      <input type="text" id="company" class="form-control" placeholder="e.g. Google, Amazon, TCS, Infosys">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select id="role" class="form-control">
+          <option>Software Development Engineer (SDE)</option>
+          <option>SDE-2</option>
+          <option>Frontend Engineer</option>
+          <option>Backend Engineer</option>
+          <option>Full Stack Engineer</option>
+          <option>Data Scientist</option>
+          <option>ML Engineer</option>
+          <option>DevOps Engineer</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Interview Type</label>
+        <select id="interview_type" class="form-control">
+          <option>Technical + Behavioral</option>
+          <option>Pure Technical (DSA + System Design)</option>
+          <option>Behavioral / HR Round</option>
+          <option>System Design Focus</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Your Skills <span style="color:var(--text-muted);font-size:12px">(for context)</span></label>
+      <input type="text" id="skills" class="form-control" placeholder="Python, Java, React, DSA, System Design">
+    </div>
+
+    <div style="background:rgba(0,113,227,.06);border:1px solid rgba(0,113,227,.18);
+                border-radius:10px;padding:14px;margin-bottom:22px">
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.7">
+        <i class="fas fa-microphone-alt" style="color:var(--primary);margin-right:6px"></i>
+        <strong>New: Voice Mode!</strong> Use your microphone 🎤 to answer questions hands-free.
+        AI reads questions aloud via text-to-speech. Works in Chrome &amp; Edge.
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="startInterview()">
+      <i class="fas fa-play"></i> Start Interview
+    </button>
+  </div>
+</div>
+
+<!-- ── Active interview panel ── -->
+<div id="interviewPanel" style="display:none">
+  <div class="grid-2" style="align-items:start">
+
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-weight:600" id="interviewTitle">Interview in progress…</div>
+          <div style="font-size:12px;color:var(--text-muted)" id="turnCount">Turn 0</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge badge-primary" id="companyBadge"></span>
+          <button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="endInterview()">
+            <i class="fas fa-stop"></i> End &amp; Evaluate
+          </button>
+        </div>
+      </div>
+
+      <div class="chat-container" id="chatContainer"></div>
+
+      <!-- Voice recording indicator -->
+      <div class="voice-badge" id="voiceBadge">
+        <div class="voice-dot"></div>
+        <span>Listening… speak your answer</span>
+      </div>
+
+      <div class="answer-row" style="margin-top:12px">
+        <textarea id="answerInput" class="form-control" rows="3"
+                  placeholder="Type your answer… or use the 🎤 mic button"
+                  style="resize:none;flex:1"></textarea>
+        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" title="Voice answer">
+          <i class="fas fa-microphone"></i>
+        </button>
+        <button class="btn btn-primary" style="padding:13px 16px;align-self:flex-end"
+                onclick="sendAnswer()">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+        <i class="fas fa-keyboard" style="margin-right:4px"></i>Enter to send &bull;
+        <i class="fas fa-microphone" style="margin-right:4px"></i>Mic for voice answer &bull;
+        🔊 Click AI messages to hear them
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px">📊 Live Session Stats</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:24px;font-weight:700;color:var(--primary)" id="qCount">0</div>
+            <div style="font-size:12px;color:var(--text-muted)">Questions</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:24px;font-weight:700;color:var(--success)" id="sessionTime">0:00</div>
+            <div style="font-size:12px;color:var(--text-muted)">Duration</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice settings card -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px">🎙️ Voice Settings</div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+          <div style="position:relative">
+            <input type="checkbox" id="ttsToggle" style="display:none" checked>
+            <div id="ttsTrack" onclick="toggleTTS()"
+                 style="width:40px;height:22px;border-radius:11px;background:var(--primary);cursor:pointer;transition:.2s;position:relative">
+              <div id="ttsThumb"
+                   style="position:absolute;top:3px;left:21px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s"></div>
+            </div>
+          </div>
+          <span>Read AI questions aloud</span>
+        </label>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:8px">
+          AI questions will be spoken via text-to-speech
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">💡 Interview Tips</div>
+        <ul style="list-style:none;font-size:13px;color:var(--text-muted)">
+          {% for tip in [
+            'Think out loud — explain your reasoning step by step',
+            'Clarify ambiguous questions before answering',
+            'Use STAR format for behavioural questions',
+            'Discuss trade-offs when proposing solutions',
+            'Speak clearly when using voice mode',
+          ] %}
+          <li style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;gap:8px">
+            <i class="fas fa-lightbulb" style="color:var(--warning);margin-top:2px;flex-shrink:0"></i>
+            {{ tip }}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Results panel ── -->
+<div id="resultsPanel" style="display:none">
+  <div style="max-width:800px;margin:0 auto">
+
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:32px;margin-bottom:8px">🎯</div>
+      <h2 style="font-size:24px;font-weight:700;margin-bottom:6px">Interview Evaluation Complete</h2>
+      <div style="color:var(--text-muted)">Here is your detailed performance breakdown</div>
+    </div>
+
+    <div class="card" style="text-align:center;margin-bottom:20px;
+         background:linear-gradient(135deg,rgba(0,113,227,.08),rgba(88,86,214,.05));
+         border-color:rgba(0,113,227,.2)">
+      <div style="font-size:64px;font-weight:900;background:linear-gradient(135deg,var(--primary),#5856d6);
+                  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent"
+           id="overallScore">--</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px">Overall Score</div>
+      <div id="hiringRec" class="badge badge-primary" style="font-size:14px;padding:8px 20px"></div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;margin-bottom:14px">Score Breakdown</div>
+        {% for label, tid in [
+          ('Technical',        'technical'),
+          ('Communication',    'communication'),
+          ('Problem Solving',  'problem_solving'),
+          ('Confidence',       'confidence'),
+          ('Reasoning Depth',  'reasoning'),
+        ] %}
+        <div style="margin-bottom:11px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+            <span>{{ label }}</span>
+            <span id="{{ tid }}Score" style="font-weight:600;color:var(--primary)">--%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="{{ tid }}Bar" style="width:0%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--success);margin-bottom:10px">
+          <i class="fas fa-star"></i> Strengths
+        </div>
+        <ul id="resStrengths" style="list-style:none;margin-bottom:16px"></ul>
+        <div style="font-size:13px;font-weight:600;color:var(--error);margin-bottom:10px">
+          <i class="fas fa-arrow-up"></i> Areas to Improve
+        </div>
+        <ul id="resImprove" style="list-style:none"></ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">
+        <i class="fas fa-comment-alt" style="color:var(--primary)"></i> Detailed Feedback
+      </div>
+      <div id="detailedFeedback" style="font-size:14px;color:var(--text-muted);line-height:1.75"></div>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="resetInterview()">
+      <i class="fas fa-redo"></i> Start Another Interview
+    </button>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var startTime, timerInterval;
+var voiceRecognition = null;
+var isVoiceRecording  = false;
+var ttsEnabled = true;
+
+/* ── TTS toggle ── */
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  var track = document.getElementById('ttsTrack');
+  var thumb = document.getElementById('ttsThumb');
+  track.style.background = ttsEnabled ? 'var(--primary)' : 'var(--border)';
+  thumb.style.left = ttsEnabled ? '21px' : '3px';
+}
+
+function speakText(text) {
+  if (!ttsEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  var clean = text.replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/\*/g, '');
+  var utt = new SpeechSynthesisUtterance(clean.substring(0, 500));
+  utt.lang  = 'en-US';
+  utt.rate  = 0.95;
+  utt.pitch = 1;
+  window.speechSynthesis.speak(utt);
+}
+
+/* ── Voice input ── */
+function toggleVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Voice input requires Chrome or Edge browser.', 'error');
+    return;
+  }
+  if (isVoiceRecording) { voiceRecognition && voiceRecognition.stop(); return; }
+
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  voiceRecognition = new SpeechRec();
+  voiceRecognition.lang = 'en-IN';
+  voiceRecognition.continuous = true;
+  voiceRecognition.interimResults = true;
+
+  voiceRecognition.onstart = function() {
+    isVoiceRecording = true;
+    document.getElementById('voiceBtn').classList.add('recording');
+    document.getElementById('voiceBtn').innerHTML = '<i class="fas fa-stop"></i>';
+    document.getElementById('voiceBadge').classList.add('active');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  };
+
+  voiceRecognition.onresult = function(event) {
+    var transcript = '';
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      transcript += event.results[i][0].transcript;
+    }
+    document.getElementById('answerInput').value = transcript;
+  };
+
+  voiceRecognition.onerror = function(event) {
+    showToast('Voice error: ' + event.error, 'error');
+    stopVoice();
+  };
+
+  voiceRecognition.onend = function() { stopVoice(); };
+  voiceRecognition.start();
+}
+
+function stopVoice() {
+  isVoiceRecording = false;
+  document.getElementById('voiceBtn').classList.remove('recording');
+  document.getElementById('voiceBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+  document.getElementById('voiceBadge').classList.remove('active');
+}
+
+/* ── Interview flow ── */
+function startInterview() {
+  var config = {
+    company:        document.getElementById('company').value || 'Top Tech Company',
+    role:           document.getElementById('role').value,
+    interview_type: document.getElementById('interview_type').value,
+    skills:         document.getElementById('skills').value,
+  };
+  showLoader('Starting interview…');
+  fetch('/api/interview/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(config),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    hideLoader();
+    if (!res.success) { showToast('Failed to start: ' + (res.error || 'Check API key.'), 'error'); return; }
+    document.getElementById('setupPanel').style.display    = 'none';
+    document.getElementById('interviewPanel').style.display = 'block';
+    document.getElementById('companyBadge').textContent    = config.company;
+    appendMsg('ai', res.message);
+    speakText(res.message);
+    startTime     = new Date();
+    timerInterval = setInterval(updateTimer, 1000);
+  })
+  .catch(function(err) { hideLoader(); showToast('Error: ' + err, 'error'); });
+}
+
+function sendAnswer() {
+  var input  = document.getElementById('answerInput');
+  var answer = input.value.trim();
+  if (!answer) return;
+  if (isVoiceRecording) stopVoice();
+  appendMsg('user', escapeHtml(answer));
+  input.value = '';
+  showLoader('AI is evaluating your answer…');
+  fetch('/api/interview/respond', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({answer: answer}),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    hideLoader();
+    if (res.success) {
+      appendMsg('ai', res.message);
+      speakText(res.message);
+      document.getElementById('qCount').textContent = res.turn || 0;
+    }
+  })
+  .catch(function() { hideLoader(); });
+}
+
+function endInterview() {
+  clearInterval(timerInterval);
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  showLoader('Evaluating your full performance…');
+  fetch('/api/interview/end', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    hideLoader();
+    document.getElementById('interviewPanel').style.display = 'none';
+    document.getElementById('resultsPanel').style.display   = 'block';
+    if (!res.success) { showToast('Evaluation failed: ' + (res.error || ''), 'error'); return; }
+    var d = res.data;
+    document.getElementById('overallScore').textContent = d.overall_score;
+    document.getElementById('hiringRec').textContent    = 'Hiring Recommendation: ' + d.hiring_recommendation;
+    var scores = [
+      ['technical',     d.technical_score],
+      ['communication', d.communication_score],
+      ['problem_solving', d.problem_solving_score],
+      ['confidence',    d.confidence_score],
+      ['reasoning',     d.reasoning_depth],
+    ];
+    scores.forEach(function(pair) {
+      document.getElementById(pair[0] + 'Score').textContent = pair[1] + '%';
+      document.getElementById(pair[0] + 'Bar').style.width   = pair[1] + '%';
+      document.getElementById(pair[0] + 'Bar').style.background = scoreColor(pair[1]);
+    });
+    document.getElementById('resStrengths').innerHTML  = renderList(d.strengths,        'check');
+    document.getElementById('resImprove').innerHTML    = renderList(d.areas_to_improve, 'arrow-up');
+    document.getElementById('detailedFeedback').textContent = d.detailed_feedback || '';
+  })
+  .catch(function(err) { hideLoader(); showToast('Error: ' + err, 'error'); });
+}
+
+function resetInterview() {
+  document.getElementById('resultsPanel').style.display  = 'none';
+  document.getElementById('setupPanel').style.display    = 'block';
+  document.getElementById('chatContainer').innerHTML     = '';
+  document.getElementById('qCount').textContent          = '0';
+  document.getElementById('sessionTime').textContent     = '0:00';
+}
+
+function appendMsg(role, content) {
+  var c   = document.getElementById('chatContainer');
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  if (role === 'ai') {
+    div.innerHTML = renderMd(content) +
+      '<div class="msg-tools"><button class="tts-btn" onclick="speakText(\'' +
+      content.replace(/'/g,"\\'").replace(/\n/g,' ').substring(0,200) +
+      '\')"><i class="fas fa-volume-up"></i> Hear</button></div>';
+  } else {
+    div.innerHTML = content;
+  }
+  c.appendChild(div);
+  c.scrollTop = c.scrollHeight;
+}
+
+function escapeHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function updateTimer() {
+  var elapsed = Math.floor((new Date() - startTime) / 1000);
+  var m = Math.floor(elapsed / 60), s = elapsed % 60;
+  document.getElementById('sessionTime').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('answerInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendAnswer(); }
+  });
+});
+</script>
+{% endblock %}

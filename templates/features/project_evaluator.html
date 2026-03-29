@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Project Evaluator — PlacementAI{% endblock %}
+{% block page_title %}AI Project Evaluator{% endblock %}
+{% block page_subtitle %}Expert review of your projects for placement interviews{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-code" style="color:var(--primary);margin-right:8px"></i>Project Details
+    </h3>
+    <div class="form-group">
+      <label class="form-label">Project Title</label>
+      <input type="text" id="title" class="form-control" placeholder="e.g. E-Commerce Platform, ML Disease Predictor">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="description" class="form-control" rows="3"
+                placeholder="What does it do? What problem does it solve?"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tech Stack</label>
+      <input type="text" id="tech_stack" class="form-control"
+             placeholder="React, Node.js, MongoDB, Python, Flask…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Key Features</label>
+      <textarea id="features" class="form-control" rows="3"
+                placeholder="User auth, real-time chat, payment integration, REST API…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Problem Solved</label>
+      <input type="text" id="problem" class="form-control"
+             placeholder="What real-world problem does this address?">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Scale / Users</label>
+        <input type="text" id="scale" class="form-control" placeholder="e.g. 500 users, personal project">
+      </div>
+      <div class="form-group">
+        <label class="form-label">GitHub Link <span style="color:var(--text-muted);font-size:12px">(optional)</span></label>
+        <input type="text" id="github" class="form-control" placeholder="https://github.com/…">
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="evaluate()">
+      <i class="fas fa-star"></i> Evaluate My Project
+    </button>
+  </div>
+
+  <div id="resultsArea">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;
+                              justify-content:center;min-height:420px;text-align:center">
+      <i class="fas fa-code-branch" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Submit your project</div>
+      <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+        Get interview questions, improvement tips, and a professional score.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function evaluate() {
+  var data = {
+    title:       document.getElementById('title').value,
+    description: document.getElementById('description').value,
+    tech_stack:  document.getElementById('tech_stack').value,
+    features:    document.getElementById('features').value,
+    problem:     document.getElementById('problem').value,
+    scale:       document.getElementById('scale').value,
+    github:      document.getElementById('github').value,
+  };
+  if (!data.title) { alert('Please enter a project title.'); return; }
+  var res = await callAPI('/api/project-evaluator', data, 'AI is evaluating your project…');
+  if (!res.success) { alert('Failed: ' + (res.error || '')); return; }
+  var d  = res.data;
+  var vc = scoreColor(d.overall_score);
+  var verdictMap = {Excellent:'var(--success)', Good:'var(--primary)', Average:'var(--warning)', 'Needs Work':'var(--error)'};
+  var vCol = verdictMap[d.verdict] || 'var(--primary)';
+
+  var html =
+    '<div class="card" style="margin-bottom:16px;text-align:center;background:linear-gradient(135deg,rgba(108,99,255,.1),transparent);border-color:rgba(108,99,255,.3)">' +
+      '<div style="font-size:60px;font-weight:900;color:' + vc + '">' + d.overall_score + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Overall Score / 100</div>' +
+      '<span class="badge" style="background:' + vCol + '22;color:' + vCol + ';font-size:14px;padding:8px 20px">' + d.verdict + '</span>' +
+      '<div style="margin-top:10px"><span class="badge badge-' + (d.resume_impact === 'High' ? 'success' : d.resume_impact === 'Medium' ? 'warning' : 'primary') + '">Resume Impact: ' + (d.resume_impact || '') + '</span></div>' +
+    '</div>' +
+
+    '<div class="grid-2" style="margin-bottom:16px">' +
+      [['Technical Complexity', d.technical_complexity], ['Innovation', d.innovation_score],
+       ['Scalability', d.scalability_score], ['Presentation Readiness', d.presentation_readiness]]
+      .map(function(p) {
+        return '<div class="card" style="text-align:center">' +
+          '<div style="font-size:24px;font-weight:800;color:' + scoreColor(p[1]) + '">' + (p[1] || 0) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted)">' + p[0] + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--warning);margin-bottom:10px"><i class="fas fa-question-circle"></i> Likely Interview Questions</div>' +
+      (d.interview_questions || []).map(function(q, i) {
+        return '<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px">' +
+          '<span style="color:var(--text-muted);margin-right:8px">Q' + (i+1) + '.</span>' + q +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:10px"><i class="fas fa-lightbulb" style="color:var(--primary)"></i> How to Present It</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);line-height:1.7">' + (d.how_to_present || '') + '</div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:10px"><i class="fas fa-arrow-up" style="color:var(--success)"></i> Improvement Suggestions</div>' +
+      '<ul style="list-style:none">' + renderList(d.improvement_suggestions, 'plus') + '</ul>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:10px"><i class="fab fa-github"></i> GitHub Checklist</div>' +
+      '<ul style="list-style:none">' + renderList(d.github_checklist, 'check-square') + '</ul>' +
+    '</div>';
+
+  document.getElementById('resultsArea').innerHTML = html;
+}
+</script>
+{% endblock %}

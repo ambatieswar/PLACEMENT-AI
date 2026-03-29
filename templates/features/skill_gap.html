@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Skill Gap Analyzer — PlacementAI{% endblock %}
+{% block page_title %}Skill Gap Analyzer{% endblock %}
+{% block page_subtitle %}Identify exactly what is missing for your target role{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-puzzle-piece" style="color:var(--primary);margin-right:8px"></i>Analyse Your Skills
+    </h3>
+
+    <div class="form-group">
+      <label class="form-label">Target Role</label>
+      <input type="text" id="target_role" class="form-control" placeholder="e.g. Full Stack Developer, Data Scientist">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Target Companies</label>
+      <input type="text" id="companies" class="form-control" placeholder="Google, Amazon, Flipkart, Startups">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Current Skills</label>
+      <textarea id="current_skills" class="form-control" rows="3"
+                placeholder="Python, HTML/CSS, Basic SQL, Java Basics, React basics…"></textarea>
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Experience Level</label>
+        <select id="experience" class="form-control">
+          <option>Fresher (0 years)</option>
+          <option>Intern experience</option>
+          <option>1-2 years</option>
+          <option>2-4 years</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Available Timeline (months)</label>
+        <select id="timeline" class="form-control">
+          <option value="1">1 month</option>
+          <option value="3" selected>3 months</option>
+          <option value="6">6 months</option>
+          <option value="12">12 months</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="analyzeGap()">
+      <i class="fas fa-search"></i> Analyse Skill Gaps
+    </button>
+  </div>
+
+  <div id="resultsArea">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;
+                              justify-content:center;min-height:420px;text-align:center">
+      <i class="fas fa-puzzle-piece" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">No analysis yet</div>
+      <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+        Fill in your details and click Analyse to see your personalised skill gap report.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function analyzeGap() {
+  var data = {
+    target_role:    document.getElementById('target_role').value,
+    companies:      document.getElementById('companies').value.split(',').map(s=>s.trim()).filter(Boolean),
+    current_skills: document.getElementById('current_skills').value.split(',').map(s=>s.trim()).filter(Boolean),
+    experience:     document.getElementById('experience').value,
+    timeline:       document.getElementById('timeline').value,
+  };
+
+  var res = await callAPI('/api/skill-gap', data, 'Analysing skill gaps with AI…');
+  if (!res.success) { alert('Analysis failed: ' + (res.error || '')); return; }
+
+  var d = res.data;
+  var area = document.getElementById('resultsArea');
+
+  area.innerHTML =
+    '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(108,99,255,.1),transparent);border-color:rgba(108,99,255,.3)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div style="font-weight:600;font-size:15px">Gap Score</div>' +
+        '<div style="font-size:34px;font-weight:900;color:' + scoreColor(d.gap_score) + '">' + d.gap_score + '/100</div>' +
+      '</div>' +
+      '<div class="progress-bar" style="height:12px"><div class="progress-fill" style="width:' + d.gap_score + '%;background:' + scoreColor(d.gap_score) + '"></div></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:8px">' +
+        (d.gap_score >= 80 ? 'You are well-prepared!' : d.gap_score >= 55 ? 'Some gaps need attention.' : 'Significant upskilling required.') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:14px;color:var(--error);margin-bottom:12px"><i class="fas fa-exclamation-triangle"></i> Critical Skill Gaps</div>' +
+      (d.critical_gaps || []).map(function(g) {
+        return '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">' +
+            '<span style="font-weight:600;font-size:14px">' + g.skill + '</span>' +
+            '<span class="badge badge-' + (g.importance === 'High' ? 'error' : g.importance === 'Med' ? 'warning' : 'primary') + '">' + g.importance + ' Priority</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted)">' + (g.resources || []).join(' • ') + '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:14px;margin-bottom:12px"><i class="fas fa-road" style="color:var(--primary)"></i> Learning Roadmap</div>' +
+      (d.roadmap || []).map(function(phase) {
+        return '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:10px;border-left:3px solid var(--primary)">' +
+          '<div style="font-weight:600;font-size:13px;margin-bottom:5px">' + phase.week + '</div>' +
+          '<ul style="list-style:none;font-size:13px;color:var(--text-muted)">' +
+            (phase.tasks || []).map(function(t) { return '<li style="margin-bottom:3px">• ' + t + '</li>'; }).join('') +
+          '</ul>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div style="font-weight:600;font-size:14px;margin-bottom:10px"><i class="fas fa-check-circle" style="color:var(--success)"></i> Your Strengths</div>' +
+      renderTags(d.existing_strengths) +
+    '</div>';
+}
+</script>
+{% endblock %}

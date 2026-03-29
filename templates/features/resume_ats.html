@@ -1,0 +1,289 @@
+{% extends 'base.html' %}
+{% block title %}Resume ATS Scorer — PlacementAI{% endblock %}
+{% block page_title %}Resume ATS Score Analyzer{% endblock %}
+{% block page_subtitle %}Upload your resume and get a detailed ATS analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s ease;
+    background: var(--bg);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, rgba(0,113,227,.12), rgba(88,86,214,.08));
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px; font-size: 26px;
+  }
+  .file-info {
+    display: none; background: var(--surface2); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); padding: 14px 18px;
+    flex-direction: row; align-items: center; gap: 12px; margin-top: 12px;
+    animation: fadeInUp .2s ease;
+  }
+  .file-info.visible { display: flex; }
+  .file-icon {
+    width: 38px; height: 38px; border-radius: 10px; background: var(--primary-light);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--primary); font-size: 17px; flex-shrink: 0;
+  }
+  .progress-upload {
+    height: 4px; background: var(--border-light); border-radius: 4px;
+    overflow: hidden; margin-top: 8px; display: none;
+  }
+  .progress-upload.active { display: block; }
+  .progress-upload-fill {
+    height: 100%; background: var(--primary);
+    border-radius: 4px; width: 0%;
+    transition: width .3s ease;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-file-upload" style="color:var(--primary);margin-right:8px"></i>Upload Resume &amp; JD
+    </h3>
+
+    <!-- File Upload Zone -->
+    <div class="form-group">
+      <label class="form-label">Resume File <span style="color:var(--text-muted);font-size:12px">(PDF, DOCX, or TXT)</span></label>
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="resumeFile" accept=".pdf,.docx,.txt" onchange="handleFileSelect(this)">
+        <div class="upload-icon">📄</div>
+        <div style="font-weight:600;font-size:15px;margin-bottom:6px">Drop your resume here</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">or click to browse files</div>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:var(--primary);color:#fff;
+                    padding:8px 18px;border-radius:980px;font-size:13px;font-weight:500">
+          <i class="fas fa-folder-open"></i> Choose File
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:10px">Supports PDF · DOCX · TXT · Max 10MB</div>
+      </div>
+
+      <!-- File selected info -->
+      <div class="file-info" id="fileInfo">
+        <div class="file-icon" id="fileIcon"><i class="fas fa-file-pdf"></i></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="fileName">—</div>
+          <div style="font-size:12px;color:var(--text-muted)" id="fileSize">—</div>
+          <div class="progress-upload" id="uploadProgress">
+            <div class="progress-upload-fill" id="uploadFill"></div>
+          </div>
+        </div>
+        <button onclick="clearFile()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;padding:4px" title="Remove file">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Job Description <span style="color:var(--text-muted);font-size:12px">(optional but improves accuracy)</span></label>
+      <textarea id="jd_text" class="form-control" rows="5"
+                placeholder="Paste the job description here…&#10;&#10;We are looking for an SDE with: Python/Java, REST APIs, DSA fundamentals, AWS preferred."></textarea>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="analyzeResume()" id="analyzeBtn" disabled>
+      <i class="fas fa-search"></i> Analyse ATS Score
+    </button>
+    <div style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px" id="analyzeHint">
+      Upload a resume file to begin analysis
+    </div>
+  </div>
+
+  <div id="resultsArea">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;
+                              justify-content:center;min-height:480px;text-align:center">
+      <i class="fas fa-file-search" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Upload your resume</div>
+      <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+        Get a detailed ATS score with keyword analysis, section scores, and improvement suggestions.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var extractedResumeText = '';
+
+/* ── Drag & Drop ── */
+var zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', function() { zone.classList.remove('drag-over'); });
+zone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  var file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+});
+
+function handleFileSelect(input) {
+  if (input.files && input.files[0]) processFile(input.files[0]);
+}
+
+function processFile(file) {
+  var allowed = ['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain'];
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf','docx','txt'].includes(ext)) {
+    showToast('Only PDF, DOCX, and TXT files are supported.', 'error');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('File size must be under 10MB.', 'error');
+    return;
+  }
+
+  // Show file info
+  var icons = {pdf: 'fa-file-pdf', docx: 'fa-file-word', txt: 'fa-file-alt'};
+  document.getElementById('fileIcon').innerHTML = '<i class="fas ' + (icons[ext] || 'fa-file') + '"></i>';
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatFileSize(file.size);
+  document.getElementById('fileInfo').classList.add('visible');
+
+  // Upload file
+  uploadFile(file);
+}
+
+function uploadFile(file) {
+  var btn = document.getElementById('analyzeBtn');
+  var hint = document.getElementById('analyzeHint');
+  var progress = document.getElementById('uploadProgress');
+  var fill = document.getElementById('uploadFill');
+
+  btn.disabled = true;
+  hint.textContent = 'Extracting text from file…';
+  progress.classList.add('active');
+
+  // Animate progress bar
+  var pct = 0;
+  var interval = setInterval(function() {
+    pct = Math.min(pct + 8, 85);
+    fill.style.width = pct + '%';
+  }, 100);
+
+  var formData = new FormData();
+  formData.append('file', file);
+
+  fetch('/api/resume-upload', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      clearInterval(interval);
+      fill.style.width = '100%';
+      setTimeout(function() { progress.classList.remove('active'); fill.style.width = '0%'; }, 600);
+
+      if (res.success && res.text) {
+        extractedResumeText = res.text;
+        btn.disabled = false;
+        hint.textContent = '✅ Text extracted (' + res.text.length + ' characters) — ready to analyse';
+        hint.style.color = 'var(--success)';
+        showToast('Resume text extracted successfully!', 'success');
+      } else {
+        hint.textContent = '❌ ' + (res.error || 'Failed to extract text');
+        hint.style.color = 'var(--error)';
+        showToast(res.error || 'Failed to extract text from file', 'error');
+      }
+    })
+    .catch(function(err) {
+      clearInterval(interval);
+      progress.classList.remove('active');
+      hint.textContent = '❌ Upload failed: ' + err;
+      hint.style.color = 'var(--error)';
+    });
+}
+
+function clearFile() {
+  document.getElementById('resumeFile').value = '';
+  document.getElementById('fileInfo').classList.remove('visible');
+  document.getElementById('analyzeBtn').disabled = true;
+  var hint = document.getElementById('analyzeHint');
+  hint.textContent = 'Upload a resume file to begin analysis';
+  hint.style.color = 'var(--text-muted)';
+  extractedResumeText = '';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+async function analyzeResume() {
+  if (!extractedResumeText) { showToast('Please upload a resume file first.', 'error'); return; }
+  var res = await callAPI('/api/resume-ats',
+    { resume_text: extractedResumeText, jd_text: document.getElementById('jd_text').value },
+    'Analysing resume with ATS engine…'
+  );
+  if (!res.success) { showToast('Analysis failed: ' + (res.error || ''), 'error'); return; }
+  var d = res.data;
+  var vc = d.ats_score >= 80 ? 'var(--success)' : d.ats_score >= 55 ? 'var(--warning)' : 'var(--error)';
+
+  var html =
+    '<div class="card" style="margin-bottom:16px;text-align:center;background:linear-gradient(135deg,rgba(0,113,227,.08),transparent);border-color:rgba(0,113,227,.2);animation:fadeInUp .3s ease">' +
+      '<div style="font-size:72px;font-weight:900;color:' + vc + ';line-height:1">' + d.ats_score + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">ATS Score / 100</div>' +
+      '<span class="badge" style="background:' + vc + '22;color:' + vc + ';font-size:14px;padding:8px 20px">' + d.overall_verdict + '</span>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:14px;margin-bottom:14px">Score Breakdown</div>' +
+      Object.entries(d.section_scores || {}).map(function(kv) {
+        var v = kv[1]; var c = scoreColor(v);
+        return '<div style="margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;text-transform:capitalize"><span>' + kv[0] + '</span><span style="font-weight:600;color:' + c + '">' + v + '%</span></div>' +
+          '<div class="progress-bar"><div class="progress-fill" style="width:' + v + '%;background:' + c + '"></div></div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:13px;color:var(--success);margin-bottom:8px">✅ Matched Keywords</div>' +
+      renderTags(d.matched_keywords) +
+      '<div style="font-weight:600;font-size:13px;color:var(--error);margin-top:14px;margin-bottom:8px">❌ Missing Keywords</div>' +
+      (d.missing_keywords || []).map(function(k) {
+        return '<span class="tag" style="background:rgba(255,59,48,.08);border:1px solid rgba(255,59,48,.15);color:var(--error)">' + k + '</span>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:13px;margin-bottom:10px"><i class="fas fa-exclamation-circle" style="color:var(--error)"></i> Critical Issues</div>' +
+      '<ul style="list-style:none">' + renderList(d.critical_issues, 'times') + '</ul>' +
+    '</div>' +
+
+    '<div class="card" style="margin-bottom:16px">' +
+      '<div style="font-weight:600;font-size:13px;margin-bottom:10px"><i class="fas fa-magic" style="color:var(--primary)"></i> Improvements</div>' +
+      '<ul style="list-style:none">' + renderList(d.improvements, 'lightbulb') + '</ul>' +
+    '</div>' +
+
+    (d.rewritten_bullets && d.rewritten_bullets.length ?
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:10px"><i class="fas fa-pen" style="color:var(--warning)"></i> Rewritten Bullet Examples</div>' +
+        d.rewritten_bullets.map(function(b) {
+          return '<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:13px;border-left:3px solid var(--warning)">• ' + b + '</div>';
+        }).join('') +
+      '</div>' : '');
+
+  document.getElementById('resultsArea').innerHTML = html;
+  document.getElementById('resultsArea').scrollIntoView({behavior: 'smooth'});
+}
+</script>
+{% endblock %}

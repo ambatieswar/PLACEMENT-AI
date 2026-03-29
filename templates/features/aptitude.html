@@ -1,0 +1,493 @@
+{% extends 'base.html' %}
+{% block title %}Aptitude Practice — PlacementAI{% endblock %}
+{% block page_title %}Aptitude & Reasoning Practice{% endblock %}
+{% block page_subtitle %}AI-generated placement-style MCQs with instant explanations{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes countdown {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: 251; }
+  }
+  .setup-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 10px;
+  }
+  .cat-btn, .diff-btn, .count-btn {
+    padding: 12px; border-radius: 10px; border: 1.5px solid var(--border);
+    background: var(--surface); cursor: pointer; text-align: center;
+    font-size: 13px; font-weight: 500; transition: all .15s; font-family: inherit;
+    color: var(--text);
+  }
+  .cat-btn:hover, .diff-btn:hover, .count-btn:hover {
+    border-color: var(--primary); color: var(--primary);
+    background: var(--primary-light);
+  }
+  .cat-btn.active, .diff-btn.active, .count-btn.active {
+    border-color: var(--primary); background: var(--primary); color: #fff;
+  }
+  .question-card {
+    background: var(--surface); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px;
+    animation: fadeInUp .25s ease;
+  }
+  .option-btn {
+    width: 100%; text-align: left; padding: 12px 16px;
+    border: 1.5px solid var(--border); border-radius: 10px; margin-bottom: 8px;
+    background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500;
+    transition: all .15s; font-family: inherit; color: var(--text); display: flex;
+    align-items: flex-start; gap: 10px;
+  }
+  .option-btn:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+  .option-btn.correct  { border-color: var(--success); background: var(--success-bg); color: #1a7a36; pointer-events: none; }
+  .option-btn.wrong    { border-color: var(--error);   background: var(--error-bg);   color: var(--error);  pointer-events: none; }
+  .option-btn.dimmed   { opacity: .4; pointer-events: none; }
+  .option-letter {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; border: 1px solid var(--border);
+  }
+  .explanation-box {
+    background: linear-gradient(135deg, rgba(0,113,227,.06), transparent);
+    border: 1px solid rgba(0,113,227,.15); border-radius: 10px;
+    padding: 14px; margin-top: 14px; font-size: 13px; line-height: 1.7;
+    display: none;
+  }
+  .explanation-box.visible { display: block; animation: fadeInUp .2s ease; }
+  .timer-svg { transform: rotate(-90deg); }
+  .timer-circle { transition: stroke-dashoffset .5s linear; }
+  .score-ring {
+    width: 120px; height: 120px; position: relative; margin: 0 auto 20px;
+  }
+  .score-ring svg { width: 100%; height: 100%; }
+  .score-center {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; flex-direction: column;
+  }
+  .progress-step {
+    height: 4px; background: var(--border-light); border-radius: 4px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .progress-step-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width .3s ease; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Setup Panel ── -->
+<div id="setupPanel">
+  <div class="card" style="max-width:680px;margin:0 auto">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:22px">
+      <i class="fas fa-brain" style="color:var(--primary);margin-right:8px"></i>Configure Your Practice Session
+    </h3>
+
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        {% for c in ['Quantitative Aptitude','Logical Reasoning','Verbal Ability','Data Interpretation','Number Series','Mixed'] %}
+        <button class="cat-btn {% if loop.first %}active{% endif %}"
+                onclick="selectCat(this, '{{ c }}')">
+          {% if c == 'Quantitative Aptitude' %}🔢{% elif c == 'Logical Reasoning' %}🧩{% elif c == 'Verbal Ability' %}📖{% elif c == 'Data Interpretation' %}📊{% elif c == 'Number Series' %}🔁{% else %}🎲{% endif %}
+          {{ c }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Difficulty</label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <button class="diff-btn" onclick="selectDiff(this,'Easy')">🟢 Easy</button>
+        <button class="diff-btn active" onclick="selectDiff(this,'Medium')">🟡 Medium</button>
+        <button class="diff-btn" onclick="selectDiff(this,'Hard')">🔴 Hard</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Number of Questions</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        <button class="count-btn" onclick="selectCount(this,5)">5 Qs</button>
+        <button class="count-btn active" onclick="selectCount(this,10)">10 Qs</button>
+        <button class="count-btn" onclick="selectCount(this,15)">15 Qs</button>
+        <button class="count-btn" onclick="selectCount(this,20)">20 Qs</button>
+      </div>
+    </div>
+
+    <div style="background:rgba(0,113,227,.06);border:1px solid rgba(0,113,227,.15);
+                border-radius:10px;padding:14px;margin-bottom:22px">
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.7">
+        <i class="fas fa-info-circle" style="color:var(--primary);margin-right:6px"></i>
+        Questions are generated by AI based on <strong>real placement patterns</strong> from
+        TCS, Infosys, Wipro, Cognizant, and other top companies. Each question comes with a
+        <strong>step-by-step AI explanation</strong>.
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="startPractice()">
+      <i class="fas fa-play"></i> Generate Questions
+    </button>
+  </div>
+</div>
+
+<!-- ── Quiz Panel ── -->
+<div id="quizPanel" style="display:none">
+  <div style="max-width:760px;margin:0 auto">
+
+    <!-- Progress bar -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span id="qLabel" style="font-weight:600">Question 1</span>
+          <span id="qProgress" style="color:var(--text-muted)">1 / 10</span>
+        </div>
+        <div class="progress-step">
+          <div class="progress-step-fill" id="progressFill" style="width:10%"></div>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div style="text-align:center;min-width:60px">
+        <svg width="52" height="52" class="timer-svg">
+          <circle cx="26" cy="26" r="22" fill="none" stroke="var(--border-light)" stroke-width="3"/>
+          <circle cx="26" cy="26" r="22" fill="none" stroke="var(--primary)" stroke-width="3"
+                  stroke-dasharray="138" id="timerCircle" class="timer-circle"/>
+        </svg>
+        <div id="timerText" style="font-size:14px;font-weight:700;margin-top:-40px;position:relative;z-index:1">--</div>
+      </div>
+
+      <div style="display:flex;gap:6px">
+        <span class="badge badge-success" id="correctBadge">✓ 0</span>
+        <span class="badge badge-error" id="wrongBadge">✗ 0</span>
+      </div>
+    </div>
+
+    <!-- Current question -->
+    <div class="question-card" id="questionCard">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px">
+        <div style="font-size:15px;font-weight:600;line-height:1.5" id="questionText">—</div>
+        <span class="badge badge-neutral" id="topicBadge" style="white-space:nowrap"></span>
+      </div>
+      <div id="optionsArea"></div>
+      <div class="explanation-box" id="explanationBox">
+        <div style="font-weight:600;font-size:13px;color:var(--primary);margin-bottom:6px">
+          <i class="fas fa-lightbulb"></i> Explanation
+        </div>
+        <div id="explanationText"></div>
+        <button id="deepExplainBtn" class="btn btn-secondary" style="margin-top:10px;font-size:12px;padding:6px 14px"
+                onclick="deepExplain()">
+          <i class="fas fa-robot"></i> Ask AI for deeper explanation
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <button class="btn btn-secondary" onclick="skipQuestion()">
+        <i class="fas fa-forward"></i> Skip
+      </button>
+      <button class="btn btn-primary" id="nextBtn" onclick="nextQuestion()" style="display:none">
+        Next Question <i class="fas fa-arrow-right"></i>
+      </button>
+      <button class="btn btn-primary" id="finishBtn" onclick="showResults()" style="display:none">
+        Finish &amp; See Score <i class="fas fa-flag-checkered"></i>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Results Panel ── -->
+<div id="resultsPanel" style="display:none">
+  <div style="max-width:700px;margin:0 auto;text-align:center">
+
+    <div class="card" style="margin-bottom:20px;animation:fadeInUp .3s ease">
+      <div style="font-size:32px;margin-bottom:12px">🎉</div>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:4px">Practice Complete!</h2>
+      <div style="color:var(--text-muted);margin-bottom:24px">Here's how you performed</div>
+
+      <div class="score-ring">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border-light)" stroke-width="8"/>
+          <circle cx="60" cy="60" r="50" fill="none" id="scoreArc"
+                  stroke="var(--primary)" stroke-width="8"
+                  stroke-dasharray="314" stroke-dashoffset="314"
+                  stroke-linecap="round" transform="rotate(-90 60 60)"
+                  style="transition: stroke-dashoffset 1s ease"/>
+        </svg>
+        <div class="score-center">
+          <div style="font-size:28px;font-weight:900" id="scoreNum">0</div>
+          <div style="font-size:11px;color:var(--text-muted)">Score</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+        <div style="background:var(--success-bg);border-radius:12px;padding:14px">
+          <div style="font-size:22px;font-weight:800;color:var(--success)" id="resCorrect">0</div>
+          <div style="font-size:12px;color:var(--text-muted)">Correct</div>
+        </div>
+        <div style="background:var(--error-bg);border-radius:12px;padding:14px">
+          <div style="font-size:22px;font-weight:800;color:var(--error)" id="resWrong">0</div>
+          <div style="font-size:12px;color:var(--text-muted)">Wrong</div>
+        </div>
+        <div style="background:var(--warning-bg);border-radius:12px;padding:14px">
+          <div style="font-size:22px;font-weight:800;color:var(--warning)" id="resSkipped">0</div>
+          <div style="font-size:12px;color:var(--text-muted)">Skipped</div>
+        </div>
+        <div style="background:var(--primary-light);border-radius:12px;padding:14px">
+          <div style="font-size:22px;font-weight:800;color:var(--primary)" id="resAccuracy">0%</div>
+          <div style="font-size:12px;color:var(--text-muted)">Accuracy</div>
+        </div>
+      </div>
+
+      <div id="performanceBadge" style="margin-bottom:20px"></div>
+    </div>
+
+    <!-- Answer review -->
+    <div class="card" style="text-align:left;margin-bottom:20px;animation:fadeInUp .4s ease">
+      <div style="font-weight:600;font-size:14px;margin-bottom:14px">📋 Answer Review</div>
+      <div id="reviewList"></div>
+    </div>
+
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="btn btn-primary" onclick="retryPractice()">
+        <i class="fas fa-redo"></i> Practice Again
+      </button>
+      <button class="btn btn-secondary" onclick="goToSetup()">
+        <i class="fas fa-cog"></i> Change Settings
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var selectedCat   = 'Quantitative Aptitude';
+var selectedDiff  = 'Medium';
+var selectedCount = 10;
+var questions     = [];
+var currentIdx    = 0;
+var userAnswers   = [];
+var correct       = 0, wrong = 0, skipped = 0;
+var timerInterval = null;
+var timeLeft      = 60;
+var currentQ      = null;
+
+/* ── Selection helpers ── */
+function selectCat(btn, cat) {
+  document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active'); selectedCat = cat;
+}
+function selectDiff(btn, diff) {
+  document.querySelectorAll('.diff-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active'); selectedDiff = diff;
+}
+function selectCount(btn, count) {
+  document.querySelectorAll('.count-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active'); selectedCount = count;
+}
+
+/* ── Generate questions ── */
+async function startPractice() {
+  var res = await callAPI('/api/aptitude/generate',
+    { category: selectedCat, difficulty: selectedDiff, count: selectedCount },
+    'Generating ' + selectedCount + ' questions with AI…'
+  );
+  if (!res.success || !res.questions || !res.questions.length) {
+    showToast('Failed to generate questions: ' + (res.error || ''), 'error'); return;
+  }
+  questions   = res.questions;
+  currentIdx  = 0;
+  userAnswers = new Array(questions.length).fill(null);
+  correct = wrong = skipped = 0;
+  document.getElementById('setupPanel').style.display  = 'none';
+  document.getElementById('quizPanel').style.display   = 'block';
+  renderQuestion();
+}
+
+/* ── Render current question ── */
+function renderQuestion() {
+  if (currentIdx >= questions.length) { showResults(); return; }
+  currentQ = questions[currentIdx];
+  var total = questions.length;
+
+  document.getElementById('qLabel').textContent    = 'Question ' + (currentIdx+1);
+  document.getElementById('qProgress').textContent = (currentIdx+1) + ' / ' + total;
+  document.getElementById('progressFill').style.width = ((currentIdx+1)/total*100) + '%';
+  document.getElementById('questionText').textContent = currentQ.question;
+  document.getElementById('topicBadge').textContent   = currentQ.topic || selectedCat;
+
+  // Options
+  var letters = ['A','B','C','D'];
+  var html = '';
+  (currentQ.options || []).forEach(function(opt, i) {
+    html += '<button class="option-btn" id="opt'+i+'" onclick="selectOption('+i+',\''+letters[i]+'\')">' +
+      '<span class="option-letter">' + letters[i] + '</span><span>' + escapeHtml(opt) + '</span>' +
+    '</button>';
+  });
+  document.getElementById('optionsArea').innerHTML = html;
+  document.getElementById('explanationBox').classList.remove('visible');
+  document.getElementById('nextBtn').style.display   = 'none';
+  document.getElementById('finishBtn').style.display = 'none';
+
+  // Timer
+  clearInterval(timerInterval);
+  timeLeft = currentQ.time_limit || 60;
+  updateTimer();
+  timerInterval = setInterval(function() {
+    timeLeft--;
+    updateTimer();
+    if (timeLeft <= 0) { clearInterval(timerInterval); autoSkip(); }
+  }, 1000);
+}
+
+function updateTimer() {
+  document.getElementById('timerText').textContent = timeLeft;
+  var pct = timeLeft / (currentQ ? currentQ.time_limit || 60 : 60);
+  var circ = 138;
+  document.getElementById('timerCircle').setAttribute('stroke-dashoffset', circ * (1 - pct));
+  document.getElementById('timerCircle').setAttribute('stroke',
+    timeLeft > 10 ? 'var(--primary)' : 'var(--error)');
+}
+
+function selectOption(idx, letter) {
+  clearInterval(timerInterval);
+  var correct_letter = currentQ.answer;
+  var letters = ['A','B','C','D'];
+
+  letters.forEach(function(l, i) {
+    var btn = document.getElementById('opt' + i);
+    if (!btn) return;
+    if (l === correct_letter) { btn.classList.add('correct'); }
+    else if (i === idx && l !== correct_letter) { btn.classList.add('wrong'); }
+    else { btn.classList.add('dimmed'); }
+  });
+
+  userAnswers[currentIdx] = letter;
+  if (letter === correct_letter) {
+    correct++;
+    document.getElementById('correctBadge').textContent = '✓ ' + correct;
+    showToast('Correct! ✅', 'success');
+  } else {
+    wrong++;
+    document.getElementById('wrongBadge').textContent = '✗ ' + wrong;
+    showToast('Wrong! The answer is ' + correct_letter, 'error');
+  }
+
+  // Show explanation
+  document.getElementById('explanationText').textContent = currentQ.explanation || '—';
+  document.getElementById('explanationBox').classList.add('visible');
+
+  // Show next/finish
+  if (currentIdx < questions.length - 1) {
+    document.getElementById('nextBtn').style.display = 'inline-flex';
+  } else {
+    document.getElementById('finishBtn').style.display = 'inline-flex';
+  }
+}
+
+function skipQuestion() {
+  clearInterval(timerInterval);
+  skipped++;
+  userAnswers[currentIdx] = null;
+  currentIdx++;
+  renderQuestion();
+}
+
+function autoSkip() {
+  showToast("Time's up!", 'error');
+  skipQuestion();
+}
+
+function nextQuestion() {
+  currentIdx++;
+  renderQuestion();
+}
+
+async function deepExplain() {
+  document.getElementById('deepExplainBtn').disabled = true;
+  document.getElementById('deepExplainBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Asking AI…';
+  var res = await callAPI('/api/aptitude/explain', {
+    question: currentQ.question,
+    options: currentQ.options,
+    answer: currentQ.answer,
+    explanation: currentQ.explanation,
+  }, 'Getting detailed explanation…');
+  document.getElementById('deepExplainBtn').style.display = 'none';
+  if (res.success) {
+    var extra = document.createElement('div');
+    extra.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light);font-size:13px;color:var(--text-muted);line-height:1.7';
+    extra.innerHTML = renderMd(res.explanation);
+    document.getElementById('explanationBox').appendChild(extra);
+  }
+}
+
+/* ── Results ── */
+function showResults() {
+  clearInterval(timerInterval);
+  document.getElementById('quizPanel').style.display   = 'none';
+  document.getElementById('resultsPanel').style.display = 'block';
+
+  var total    = questions.length;
+  var answered = correct + wrong;
+  var score    = answered > 0 ? Math.round(correct / total * 100) : 0;
+  var accuracy = answered > 0 ? Math.round(correct / answered * 100) : 0;
+
+  document.getElementById('scoreNum').textContent    = score + '%';
+  document.getElementById('resCorrect').textContent  = correct;
+  document.getElementById('resWrong').textContent    = wrong;
+  document.getElementById('resSkipped').textContent  = skipped;
+  document.getElementById('resAccuracy').textContent = accuracy + '%';
+
+  // Arc animation
+  setTimeout(function() {
+    document.getElementById('scoreArc').style.strokeDashoffset = 314 * (1 - score/100);
+    document.getElementById('scoreArc').style.stroke =
+      score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warning)' : 'var(--error)';
+  }, 100);
+
+  // Badge
+  var badge = score >= 80 ? ['🏆','Excellent!','success'] :
+              score >= 60 ? ['👍','Good Job!','primary']  :
+              score >= 40 ? ['📈','Keep Practicing','warning'] : ['💪','Needs More Practice','error'];
+  document.getElementById('performanceBadge').innerHTML =
+    '<span class="badge badge-' + badge[2] + '" style="font-size:14px;padding:8px 20px">' +
+    badge[0] + ' ' + badge[1] + '</span>';
+
+  // Review list
+  var letters = ['A','B','C','D'];
+  var html = '';
+  questions.forEach(function(q, i) {
+    var ua = userAnswers[i];
+    var isCorrect = ua === q.answer;
+    var status = ua === null ? '⏭ Skipped' : isCorrect ? '✅ Correct' : '❌ Wrong';
+    var color  = ua === null ? 'var(--warning)' : isCorrect ? 'var(--success)' : 'var(--error)';
+    html += '<div style="padding:10px 0;border-bottom:1px solid var(--border-light);font-size:13px">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+        '<span style="font-weight:600">Q' + (i+1) + '. ' + q.question.substring(0,80) + (q.question.length>80?'…':'') + '</span>' +
+        '<span style="color:' + color + ';font-weight:600;white-space:nowrap;margin-left:10px">' + status + '</span>' +
+      '</div>' +
+      (ua && !isCorrect ? '<div style="color:var(--error);font-size:12px">Your answer: ' + ua + '</div>' : '') +
+      '<div style="color:var(--success);font-size:12px">Correct: ' + q.answer + ' — ' + (q.options[q.answer.charCodeAt(0)-65] || '') + '</div>' +
+    '</div>';
+  });
+  document.getElementById('reviewList').innerHTML = html;
+}
+
+function retryPractice() {
+  questions = []; currentIdx = 0; userAnswers = []; correct = wrong = skipped = 0;
+  document.getElementById('resultsPanel').style.display = 'none';
+  document.getElementById('setupPanel').style.display   = 'block';
+  startPractice();
+}
+function goToSetup() {
+  document.getElementById('resultsPanel').style.display = 'none';
+  document.getElementById('setupPanel').style.display   = 'block';
+}
+
+function escapeHtml(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+{% endblock %}

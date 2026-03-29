@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Trend Analysis — PlacementAI{% endblock %}
+{% block page_title %}Placement Trend Analysis{% endblock %}
+{% block page_subtitle %}2025 tech industry hiring trends and salary insights{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px;margin:0 auto 28px">
+  <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+    <i class="fas fa-fire" style="color:var(--secondary);margin-right:8px"></i>Customise Your Analysis
+  </h3>
+  <div class="grid-3">
+    <div class="form-group">
+      <label class="form-label">Domain</label>
+      <select id="domain" class="form-control">
+        <option>Software Engineering</option>
+        <option>Data Science &amp; AI</option>
+        <option>DevOps &amp; Cloud</option>
+        <option>Cybersecurity</option>
+        <option>Product Management</option>
+        <option>Frontend Development</option>
+        <option>Backend Development</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Role</label>
+      <input type="text" id="role" class="form-control" value="SDE" placeholder="SDE, Data Scientist…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Location</label>
+      <select id="location" class="form-control">
+        <option>India</option><option>USA</option><option>Europe</option><option>Global</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn btn-primary btn-block" onclick="analyzeTrends()">
+    <i class="fas fa-chart-bar"></i> Analyse 2025 Trends
+  </button>
+</div>
+
+<div id="resultsArea">
+  <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+    <i class="fas fa-chart-line" style="font-size:48px;opacity:.25;display:block;margin-bottom:16px"></i>
+    Click the button above to get the latest 2025 placement trends.
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function analyzeTrends() {
+  var data = {
+    domain:   document.getElementById('domain').value,
+    role:     document.getElementById('role').value,
+    location: document.getElementById('location').value,
+  };
+  var res = await callAPI('/api/trend-analysis', data, 'Fetching 2025 placement trends…');
+  if (!res.success) { alert('Failed: ' + (res.error || '')); return; }
+  var d = res.data;
+
+  var html =
+    '<div class="grid-3" style="margin-bottom:24px">' +
+      (d.top_roles_2025 || []).slice(0,3).map(function(r) {
+        return '<div class="card" style="text-align:center;border-color:rgba(108,99,255,.3)">' +
+          '<div style="font-weight:700;margin-bottom:4px">' + r.role + '</div>' +
+          '<div style="font-size:22px;font-weight:800;color:var(--success);margin-bottom:4px">' + r.avg_ctc + '</div>' +
+          '<span class="badge badge-success">' + r.growth + ' growth</span>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+
+    '<div class="grid-2" style="margin-bottom:20px">' +
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:14px"><i class="fas fa-rocket" style="color:var(--success)"></i> Emerging Skills 2025</div>' +
+        (d.emerging_skills || []).map(function(s) {
+          return '<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+              '<span style="font-weight:600;font-size:13px">' + s.skill + '</span>' +
+              '<span class="badge badge-success">' + s.demand_growth + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted)">' + (s.timeline || '') + ' • ' + (s.difficulty || '') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:14px"><i class="fas fa-building" style="color:var(--primary)"></i> Company Hiring Trends</div>' +
+        (d.company_hiring_trends || []).map(function(c) {
+          return '<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">' +
+            '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+              '<span style="font-weight:600;font-size:13px">' + c.company + '</span>' +
+              '<span style="font-size:12px;color:var(--success)">' + (c.headcount_change || '') + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted)">' + (c.focus_areas || []).join(', ') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="grid-2" style="margin-bottom:20px">' +
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:14px"><i class="fas fa-rupee-sign" style="color:var(--warning)"></i> Salary Trend</div>' +
+        Object.entries(d.salary_trends || {}).map(function(kv) {
+          return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">' +
+            '<span>' + kv[0] + '</span><span style="font-weight:600;color:var(--success)">' + kv[1] + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:14px"><i class="fas fa-laptop-house" style="color:var(--primary)"></i> Work Model 2025</div>' +
+        Object.entries(d.remote_vs_onsite || {}).map(function(kv) {
+          return '<div style="margin-bottom:12px">' +
+            '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;text-transform:capitalize">' +
+              '<span>' + kv[0] + '</span><span style="font-weight:600;color:var(--primary)">' + kv[1] + '</span>' +
+            '</div>' +
+            '<div class="progress-bar"><div class="progress-fill" style="width:' + parseInt(kv[1]) + '%"></div></div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div style="font-weight:600;font-size:14px;margin-bottom:10px"><i class="fas fa-lightbulb" style="color:var(--warning)"></i> Key Insights &amp; Recommendations</div>' +
+      '<ul style="list-style:none">' + renderList(d.insights, 'chart-line') + '</ul>' +
+      '<ul style="list-style:none;margin-top:8px">' + renderList(d.recommendations, 'arrow-right') + '</ul>' +
+    '</div>';
+
+  document.getElementById('resultsArea').innerHTML = html;
+}
+</script>
+{% endblock %}

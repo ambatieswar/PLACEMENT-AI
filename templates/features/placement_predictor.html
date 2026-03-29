@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block title %}Placement Predictor — PlacementAI{% endblock %}
+{% block page_title %}Placement Probability Predictor{% endblock %}
+{% block page_subtitle %}AI-powered analysis of your placement chances{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+
+  <!-- ── Input form ── -->
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-user" style="color:var(--primary);margin-right:8px"></i>Your Profile
+    </h3>
+
+    <div class="form-group">
+      <label class="form-label">CGPA / Percentage</label>
+      <input type="number" id="cgpa" class="form-control" placeholder="e.g. 8.5" step="0.1" min="0" max="10">
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Branch</label>
+        <select id="branch" class="form-control">
+          <option>CSE</option><option>IT</option><option>ECE</option>
+          <option>EEE</option><option>Mechanical</option><option>Civil</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">College Tier</label>
+        <select id="college_tier" class="form-control">
+          <option>Tier 1 (IIT/NIT)</option><option>Tier 2</option>
+          <option>Tier 3</option><option>Private College</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Skills <span style="color:var(--text-muted);font-size:12px">(comma-separated)</span></label>
+      <input type="text" id="skills" class="form-control" placeholder="Python, DSA, React, SQL, Machine Learning">
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">DSA Problems Solved</label>
+        <input type="number" id="dsa_count" class="form-control" placeholder="e.g. 200" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Number of Projects</label>
+        <input type="number" id="projects_count" class="form-control" placeholder="e.g. 4" min="0">
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Internships</label>
+        <select id="internships" class="form-control">
+          <option value="0">None</option>
+          <option value="1">1 internship</option>
+          <option value="2">2 internships</option>
+          <option value="3+">3+ internships</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active Backlogs</label>
+        <input type="number" id="backlogs" class="form-control" value="0" min="0">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Communication Skills (1–10):
+        <strong id="commVal" style="color:var(--primary)">6</strong>
+      </label>
+      <input type="range" id="communication" class="form-control"
+             min="1" max="10" value="6" style="padding:6px 0"
+             oninput="document.getElementById('commVal').textContent=this.value">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Target Companies</label>
+      <input type="text" id="target_companies" class="form-control" placeholder="Google, Microsoft, Amazon, Infosys">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Certifications <span style="color:var(--text-muted);font-size:12px">(optional)</span></label>
+      <input type="text" id="certifications" class="form-control" placeholder="AWS, Google Cloud, etc.">
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="predict()">
+      <i class="fas fa-rocket"></i> Predict My Placement Probability
+    </button>
+  </div>
+
+  <!-- ── Results panel ── -->
+  <div id="emptyState" class="card"
+       style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+              min-height:420px;text-align:center">
+    <i class="fas fa-chart-line" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+    <div style="font-size:16px;font-weight:600;margin-bottom:8px">Fill in your profile</div>
+    <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+      Complete the form and click Predict to get your AI-powered placement probability analysis.
+    </div>
+  </div>
+
+  <div id="resultsPanel" style="display:none">
+
+    <!-- Overall score -->
+    <div class="card" style="margin-bottom:16px;text-align:center;
+         background:linear-gradient(135deg,rgba(108,99,255,.1),rgba(246,79,89,.05));
+         border-color:rgba(108,99,255,.3)">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Overall Placement Probability</div>
+      <div id="mainScore"
+           style="font-size:76px;font-weight:900;background:var(--gradient);
+                  -webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1">--</div>
+      <div style="font-size:18px;font-weight:600;margin-top:2px">%</div>
+      <div id="packageRange" style="margin-top:12px;font-size:15px;color:var(--success);font-weight:600"></div>
+    </div>
+
+    <!-- Tier bars -->
+    <div class="card" style="margin-bottom:16px">
+      <h4 style="font-size:14px;font-weight:600;margin-bottom:14px">Company Tier Probabilities</h4>
+      {% for tier, tid, color in [
+        ('Tier 1 (FAANG / Top MNCs)', 't1', 'var(--primary)'),
+        ('Tier 2 (Mid-level companies)', 't2', 'var(--warning)'),
+        ('Tier 3 / Service companies', 't3', 'var(--success)'),
+      ] %}
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span>{{ tier }}</span>
+          <span id="{{ tid }}" style="font-weight:600;color:{{ color }}">--%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="{{ tid }}bar"
+               style="width:0%;background:{{ color }};"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Strengths / weaknesses -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--success);margin-bottom:10px">
+          <i class="fas fa-thumbs-up"></i> Strengths
+        </div>
+        <ul id="strengths" style="list-style:none"></ul>
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:600;color:var(--error);margin-bottom:10px">
+          <i class="fas fa-exclamation-triangle"></i> Weak Areas
+        </div>
+        <ul id="weaknesses" style="list-style:none"></ul>
+      </div>
+    </div>
+
+    <!-- Matching companies -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">
+        <i class="fas fa-building" style="color:var(--primary)"></i> Top Matching Companies
+      </div>
+      <div id="companies"></div>
+    </div>
+
+    <!-- Action plan -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">
+        <i class="fas fa-list-check" style="color:var(--primary)"></i> Action Plan
+      </div>
+      <ul id="actionPlan" style="list-style:none"></ul>
+    </div>
+
+  </div><!-- /#resultsPanel -->
+
+</div><!-- /.grid-2 -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function predict() {
+  var data = {
+    cgpa:             document.getElementById('cgpa').value,
+    branch:           document.getElementById('branch').value,
+    college_tier:     document.getElementById('college_tier').value,
+    skills:           document.getElementById('skills').value.split(',').map(s=>s.trim()).filter(Boolean),
+    dsa_count:        document.getElementById('dsa_count').value,
+    projects_count:   document.getElementById('projects_count').value,
+    internships:      document.getElementById('internships').value,
+    backlogs:         document.getElementById('backlogs').value,
+    communication:    document.getElementById('communication').value,
+    target_companies: document.getElementById('target_companies').value.split(',').map(s=>s.trim()).filter(Boolean),
+    certifications:   document.getElementById('certifications').value,
+  };
+
+  var res = await callAPI('/api/placement-predictor', data, 'Analysing your profile…');
+  if (!res.success) { alert('Analysis failed: ' + (res.error || 'Check your Mistral API key.')); return; }
+
+  var d = res.data;
+  document.getElementById('emptyState').style.display   = 'none';
+  document.getElementById('resultsPanel').style.display = 'block';
+
+  document.getElementById('mainScore').textContent   = d.overall_probability;
+  document.getElementById('packageRange').textContent = '💰 Estimated Package: ' + d.estimated_package;
+
+  [['t1', d.tier1_probability], ['t2', d.tier2_probability], ['t3', d.tier3_probability]].forEach(function(pair) {
+    document.getElementById(pair[0]).textContent      = pair[1] + '%';
+    document.getElementById(pair[0] + 'bar').style.width = pair[1] + '%';
+  });
+
+  document.getElementById('strengths').innerHTML   = renderList(d.strengths,  'check');
+  document.getElementById('weaknesses').innerHTML  = renderList(d.weaknesses, 'times');
+  document.getElementById('companies').innerHTML   = renderTags(d.top_matching_companies);
+  document.getElementById('actionPlan').innerHTML  = renderList(d.action_plan, 'arrow-right');
+}
+</script>
+{% endblock %}

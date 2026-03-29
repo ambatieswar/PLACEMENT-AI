@@ -1,0 +1,111 @@
+{% extends 'auth_base.html' %}
+{% block title %}Create Account — PlacementAI{% endblock %}
+
+{% block extra_css %}
+<style>
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    position: relative;
+  }
+  .auth-wrap::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at 20% 50%, rgba(108,99,255,.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .auth-box {
+    width: 100%; max-width: 500px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px;
+    position: relative; z-index: 1;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-box">
+
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-size:24px;font-weight:800;background:var(--gradient);
+                  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                  margin-bottom:8px">
+        🎯 PlacementAI
+      </div>
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:6px">Create your account</h2>
+      <p style="color:var(--text-muted);font-size:14px">Start your placement journey today</p>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">
+          <i class="fas fa-info-circle"></i> {{ msg }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="/signup">
+
+      <div class="form-group">
+        <label class="form-label" for="fullname">Full Name</label>
+        <input
+          type="text" id="fullname" name="fullname"
+          class="form-control" placeholder="Your full name"
+          required autofocus
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="email">Email Address</label>
+        <input
+          type="email" id="email" name="email"
+          class="form-control" placeholder="you@example.com"
+          required
+        >
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input
+            type="password" id="password" name="password"
+            class="form-control" placeholder="Min 8 characters"
+            required minlength="8"
+          >
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="confirm_password">Confirm Password</label>
+          <input
+            type="password" id="confirm_password" name="confirm_password"
+            class="form-control" placeholder="Re-enter password"
+            required minlength="8"
+          >
+        </div>
+      </div>
+
+      <div style="background:rgba(108,99,255,.06);border:1px solid rgba(108,99,255,.2);
+                  border-radius:10px;padding:12px;margin-bottom:22px;font-size:13px;
+                  color:var(--text-muted)">
+        <i class="fas fa-shield-alt" style="color:var(--primary);margin-right:8px"></i>
+        Signing up gives you access to all 9 AI-powered placement tools — free.
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">
+        Create Account &nbsp;<i class="fas fa-rocket"></i>
+      </button>
+    </form>
+
+    <p style="text-align:center;margin-top:22px;font-size:14px;color:var(--text-muted)">
+      Already have an account? <a href="/login"><strong>Sign in</strong></a>
+    </p>
+
+  </div>
+</div>
+{% endblock %}

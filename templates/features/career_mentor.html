@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% block title %}Career Mentor — PlacementAI{% endblock %}
+{% block page_title %}AI Career Mentor{% endblock %}
+{% block page_subtitle %}Your 24/7 placement strategy advisor{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes pulse {
+    0%, 100% { opacity: .25; transform: scale(.85); }
+    50%       { opacity: 1;   transform: scale(1); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .mentor-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+    height: calc(100vh - 182px);
+    min-height: 480px;
+  }
+  .chat-shell {
+    display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .chat-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, rgba(0,113,227,.04), transparent);
+  }
+  .chat-body {
+    flex: 1; overflow-y: auto; padding: 18px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .chat-msg { animation: fadeInUp .2s ease; }
+  .chat-footer { padding: 14px; border-top: 1px solid var(--border); }
+  .topic-chip {
+    padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    color: var(--text-muted); border: 1px solid transparent; margin-bottom: 4px;
+    transition: all .15s; display: block;
+  }
+  .topic-chip:hover {
+    background: var(--bg); border-color: var(--border); color: var(--text);
+  }
+  .send-row { display: flex; gap: 10px; align-items: flex-end; }
+  .mic-btn {
+    background: var(--bg); border: 1.5px solid var(--border); border-radius: 50%;
+    width: 42px; height: 42px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; font-size: 15px;
+    transition: all .15s; flex-shrink: 0; color: var(--text-muted);
+  }
+  .mic-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .mic-btn.recording { background: var(--error); border-color: var(--error); color: #fff; animation: pulse 1s infinite; }
+  @media (max-width: 768px) { .mentor-layout { grid-template-columns: 1fr; height: auto; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mentor-layout">
+
+  <!-- ── Left sidebar ── -->
+  <div style="display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">🎯 Your Goals</div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" style="font-size:12px">Placement Goal</label>
+        <input type="text" id="user_goals" class="form-control"
+               placeholder="e.g. Google SDE by Dec 2025" style="font-size:13px">
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">💬 Quick Topics</div>
+      {% set topics = [
+        'How to crack Google SDE interview',
+        'Best DSA strategy for beginners',
+        'MBA vs MS after BTech?',
+        'How to negotiate salary offer',
+        'Dealing with placement anxiety',
+        'Does CGPA matter for top companies?',
+        'How to build a strong resume',
+        'Top skills for 2025 placements',
+        'How many projects do I need?',
+        'Should I do competitive programming?',
+      ] %}
+      {% for topic in topics %}
+      <div class="topic-chip" onclick="askTopic(this.textContent)">{{ topic }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="card" style="background:linear-gradient(135deg,rgba(0,113,227,.06),transparent)">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--primary)">💡 Pro Tips</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.7">
+        Be specific about your college, CGPA, skills (e.g. "I'm 3rd-year CSE, CGPA 8.2, want to crack Wipro"). More context = better advice.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Chat area ── -->
+  <div class="chat-shell">
+    <div class="chat-header">
+      <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#5856d6);
+                  display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(0,113,227,.3)">🤖</div>
+      <div>
+        <div style="font-weight:600;font-size:14px">PlacementAI Mentor</div>
+        <div style="font-size:12px;color:var(--success);display:flex;align-items:center;gap:4px">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success)"></span> Online — ready to help
+        </div>
+      </div>
+      <button onclick="clearChat()" class="btn btn-secondary"
+              style="margin-left:auto;padding:6px 12px;font-size:12px">
+        <i class="fas fa-trash"></i> Clear
+      </button>
+    </div>
+
+    <div class="chat-body" id="chatBody">
+      <div class="chat-msg ai">
+        👋 Hi <strong>{{ session.get('fullname', 'there') }}</strong>! I'm your AI Career Mentor,
+        specialised in tech placements.<br><br>
+        I can help you with:<br>
+        🎯 Interview strategy for specific companies<br>
+        📚 What to study and in what order<br>
+        💼 Career path guidance<br>
+        🧠 Dealing with placement anxiety<br>
+        💰 Salary negotiation tips<br><br>
+        What's on your mind? Ask me anything! 🚀
+      </div>
+    </div>
+
+    <div class="chat-footer">
+      <div class="send-row">
+        <textarea id="msgInput" class="form-control" rows="2"
+                  placeholder="Ask anything about your placement journey…"
+                  style="resize:none;flex:1;font-size:14px"></textarea>
+        <button class="mic-btn" id="micBtn" onclick="toggleVoice()" title="Voice input">
+          <i class="fas fa-microphone"></i>
+        </button>
+        <button class="btn btn-primary" style="padding:12px 16px" onclick="sendMsg()">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+        Enter to send • Shift+Enter for new line • 🎤 mic for voice input
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Use chatHistory (not 'history') to avoid conflict with window.history
+var chatHistory = [];
+var recognition = null;
+var isRecording = false;
+
+function askTopic(topic) {
+  document.getElementById('msgInput').value = topic.trim();
+  sendMsg();
+}
+
+function sendMsg() {
+  var input = document.getElementById('msgInput');
+  var msg   = input.value.trim();
+  if (!msg) return;
+
+  appendMsg('user', escapeHtml(msg));
+  input.value = '';
+  chatHistory.push({role: 'user', content: msg});
+
+  var typing = appendTyping();
+
+  fetch('/api/career-mentor', {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify({
+      message:    msg,
+      history:    chatHistory.slice(-12),
+      user_goals: document.getElementById('user_goals').value,
+    }),
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    typing.remove();
+    if (res.success) {
+      appendMsg('ai', renderMd(res.message));
+      chatHistory.push({role: 'assistant', content: res.message});
+    } else {
+      appendMsg('ai', '⚠️ Error: ' + (res.error || 'Check your API key in .env'));
+    }
+  })
+  .catch(function(err) {
+    typing.remove();
+    appendMsg('ai', '⚠️ Connection error. Is the server running? (' + err + ')');
+  });
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function appendMsg(role, htmlContent) {
+  var body = document.getElementById('chatBody');
+  var div  = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.innerHTML = htmlContent;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+  return div;
+}
+
+function appendTyping() {
+  var body = document.getElementById('chatBody');
+  var div  = document.createElement('div');
+  div.className = 'chat-msg ai';
+  div.innerHTML =
+    '<div style="display:flex;gap:5px;align-items:center">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:pulse 1s .0s infinite"></div>' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:pulse 1s .2s infinite"></div>' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);animation:pulse 1s .4s infinite"></div>' +
+    '</div>';
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+  return div;
+}
+
+function clearChat() {
+  chatHistory = [];
+  document.getElementById('chatBody').innerHTML =
+    '<div class="chat-msg ai">Chat cleared! How can I help you? 😊</div>';
+}
+
+/* ── Voice input ── */
+function toggleVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Voice input not supported in this browser. Use Chrome or Edge.', 'error');
+    return;
+  }
+  if (isRecording) {
+    recognition && recognition.stop();
+    return;
+  }
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'en-IN';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = function() {
+    isRecording = true;
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('micBtn').innerHTML = '<i class="fas fa-stop"></i>';
+  };
+  recognition.onresult = function(event) {
+    var transcript = event.results[0][0].transcript;
+    var input = document.getElementById('msgInput');
+    input.value = (input.value ? input.value + ' ' : '') + transcript;
+    input.focus();
+  };
+  recognition.onerror = function(event) {
+    showToast('Voice error: ' + event.error, 'error');
+  };
+  recognition.onend = function() {
+    isRecording = false;
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('micBtn').innerHTML = '<i class="fas fa-microphone"></i>';
+  };
+  recognition.start();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('msgInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+  });
+});
+</script>
+{% endblock %}

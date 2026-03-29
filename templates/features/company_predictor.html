@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}Company Predictor — PlacementAI{% endblock %}
+{% block page_title %}Company Prediction Engine{% endblock %}
+{% block page_subtitle %}Find your best-fit companies based on your profile{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-building" style="color:var(--primary);margin-right:8px"></i>Your Profile
+    </h3>
+    <div class="form-group">
+      <label class="form-label">Skills</label>
+      <input type="text" id="skills" class="form-control" placeholder="Python, React, SQL, Node.js, DSA">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">CGPA</label>
+        <input type="number" id="cgpa" class="form-control" placeholder="8.0" step="0.1" min="0" max="10">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Branch</label>
+        <select id="branch" class="form-control">
+          <option>CSE</option><option>IT</option><option>ECE</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">DSA Level</label>
+        <select id="dsa_level" class="form-control">
+          <option>Beginner (0-50 problems)</option>
+          <option>Intermediate (50-200)</option>
+          <option>Advanced (200-500)</option>
+          <option>Expert (500+)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Internships</label>
+        <select id="internship" class="form-control">
+          <option value="None">None</option>
+          <option value="1 internship">1 internship</option>
+          <option value="Multiple internships">Multiple</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Projects Description</label>
+      <input type="text" id="projects" class="form-control"
+             placeholder="e.g. E-commerce app, ML model, REST API backend">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Preferred Location</label>
+        <select id="location" class="form-control">
+          <option>Bangalore</option><option>Hyderabad</option><option>Pune</option>
+          <option>Chennai</option><option>Mumbai</option><option>Delhi NCR</option>
+          <option>Remote</option><option>Any</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expected CTC (LPA)</label>
+        <input type="number" id="expected_ctc" class="form-control" placeholder="10" min="1">
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="predict()">
+      <i class="fas fa-search"></i> Find Best Companies
+    </button>
+  </div>
+
+  <div id="resultsArea">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;
+                              justify-content:center;min-height:420px;text-align:center">
+      <i class="fas fa-building" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Discover matching companies</div>
+      <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+        Get personalised company recommendations with fit scores and preparation tips.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var tierColors = {Tier1:'var(--primary)', Tier2:'var(--success)', Tier3:'var(--warning)', Startup:'var(--secondary)'};
+
+async function predict() {
+  var data = {
+    skills:       document.getElementById('skills').value.split(',').map(s=>s.trim()).filter(Boolean),
+    cgpa:         document.getElementById('cgpa').value,
+    branch:       document.getElementById('branch').value,
+    dsa_level:    document.getElementById('dsa_level').value,
+    internship:   document.getElementById('internship').value,
+    projects:     document.getElementById('projects').value,
+    location:     document.getElementById('location').value,
+    expected_ctc: document.getElementById('expected_ctc').value,
+  };
+  var res = await callAPI('/api/company-predictor', data, 'Finding best companies for you…');
+  if (!res.success) { alert('Failed: ' + (res.error || '')); return; }
+
+  var d   = res.data;
+  var recs = d.recommendations || [];
+
+  var html =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+      '<div style="font-weight:600">' + recs.length + ' Companies Found</div>' +
+      '<div class="badge badge-primary">' + (d.total_companies_analysed || '100+') + ' Analysed</div>' +
+    '</div>' +
+
+    recs.map(function(c) {
+      var col = tierColors[c.tier] || 'var(--primary)';
+      return '<div class="card" style="margin-bottom:12px;border-color:' + col + '33">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-weight:700;font-size:16px">' + c.company + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted)">' + (c.interview_process || '') + '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:26px;font-weight:800;color:' + col + '">' + c.fit_score + '%</div>' +
+            '<span class="badge" style="background:' + col + '22;color:' + col + ';font-size:11px">' + c.tier + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="progress-bar" style="margin-bottom:10px">' +
+          '<div class="progress-fill" style="width:' + c.fit_score + '%;background:' + col + '"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px">' +
+          '<span style="color:var(--success)">💰 ' + (c.package_range || '') + '</span>' +
+          '<span style="color:var(--warning)">⚡ ' + (c.difficulty || '') + '</span>' +
+          '<span style="color:var(--text-muted)">📅 ' + (c.application_timeline || '') + '</span>' +
+        '</div>' +
+        (c.gaps_to_fill && c.gaps_to_fill.length ?
+          '<div style="margin-top:7px;font-size:12px;color:var(--error)">Gap: ' + c.gaps_to_fill.join(', ') + '</div>' : '') +
+      '</div>';
+    }).join('') +
+
+    (d.strategy ?
+      '<div class="card" style="margin-top:4px;background:rgba(108,99,255,.05);border-color:rgba(108,99,255,.3)">' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px">📊 Strategy</div>' +
+        '<div style="font-size:13px;color:var(--text-muted)">' + d.strategy + '</div>' +
+      '</div>' : '');
+
+  document.getElementById('resultsArea').innerHTML = html;
+}
+</script>
+{% endblock %}

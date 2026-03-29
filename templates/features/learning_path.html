@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Learning Path — PlacementAI{% endblock %}
+{% block page_title %}Personalised Learning Path{% endblock %}
+{% block page_subtitle %}AI-generated week-by-week roadmap for your target company{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card" style="align-self:start">
+    <h3 style="font-size:15px;font-weight:600;margin-bottom:20px">
+      <i class="fas fa-road" style="color:var(--primary);margin-right:8px"></i>Configure Your Path
+    </h3>
+    <div class="form-group">
+      <label class="form-label">Target Role</label>
+      <input type="text" id="target_role" class="form-control" placeholder="e.g. Backend Engineer, Data Scientist">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Target Company</label>
+      <input type="text" id="target_company" class="form-control" placeholder="e.g. Google, Amazon, Startup">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Current Skills</label>
+      <textarea id="current_skills" class="form-control" rows="3"
+                placeholder="Python, Basic DSA, HTML/CSS…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Weak Areas</label>
+      <input type="text" id="weak_areas" class="form-control"
+             placeholder="System Design, Dynamic Programming, SQL">
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Hours Per Day</label>
+        <input type="number" id="hours_per_day" class="form-control" value="3" min="1" max="12">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Timeline (weeks)</label>
+        <input type="number" id="timeline" class="form-control" value="12" min="4" max="52">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Learning Style</label>
+      <select id="learning_style" class="form-control">
+        <option value="video-first">Video-first</option>
+        <option value="reading-first">Reading / Articles first</option>
+        <option value="mixed" selected>Mixed</option>
+        <option value="hands-on">Hands-on projects</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="generatePath()">
+      <i class="fas fa-magic"></i> Generate My Learning Path
+    </button>
+  </div>
+
+  <div id="resultsArea">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;
+                              justify-content:center;min-height:420px;text-align:center">
+      <i class="fas fa-route" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Your path awaits</div>
+      <div style="color:var(--text-muted);font-size:14px;max-width:280px">
+        Get a detailed week-by-week roadmap with curated resources and milestones.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function generatePath() {
+  var data = {
+    target_role:    document.getElementById('target_role').value,
+    target_company: document.getElementById('target_company').value,
+    current_skills: document.getElementById('current_skills').value.split(',').map(s=>s.trim()).filter(Boolean),
+    weak_areas:     document.getElementById('weak_areas').value.split(',').map(s=>s.trim()).filter(Boolean),
+    hours_per_day:  document.getElementById('hours_per_day').value,
+    timeline:       document.getElementById('timeline').value,
+    learning_style: document.getElementById('learning_style').value,
+  };
+  var res = await callAPI('/api/learning-path', data, 'Generating your personalised learning path…');
+  if (!res.success) { alert('Failed: ' + (res.error || '')); return; }
+  var d = res.data;
+
+  var html =
+    '<div class="card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(108,99,255,.1),transparent);border-color:rgba(108,99,255,.3)">' +
+      '<div style="display:flex;gap:24px;flex-wrap:wrap">' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--primary)">' + (d.total_duration || '12 weeks') + '</div><div style="font-size:12px;color:var(--text-muted)">Total Duration</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--success)">' + (d.daily_hours_needed || 3) + 'h</div><div style="font-size:12px;color:var(--text-muted)">Daily Hours</div></div>' +
+        '<div><div style="font-size:24px;font-weight:800;color:var(--warning)">' + (d.phases || []).length + '</div><div style="font-size:12px;color:var(--text-muted)">Phases</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    (d.phases || []).map(function(phase) {
+      return '<div class="card" style="margin-bottom:14px;border-left:3px solid var(--primary)">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+          '<div>' +
+            '<div style="font-weight:700;font-size:15px">Phase ' + phase.phase + ': ' + (phase.title || '') + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted)">' + (phase.duration || '') + ' • ' + (phase.focus || '') + '</div>' +
+          '</div>' +
+          '<span class="badge badge-primary">Phase ' + phase.phase + '</span>' +
+        '</div>' +
+        '<div style="margin-bottom:10px">' +
+          '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:6px">TOPICS</div>' +
+          (phase.topics || []).map(function(t) { return '<span class="tag">' + t.topic + '</span>'; }).join('') +
+        '</div>' +
+        (phase.milestones && phase.milestones.length ?
+          '<div style="font-size:12px;color:var(--success);margin-top:6px">🎯 ' + phase.milestones.join(' • ') + '</div>' : '') +
+        (phase.projects && phase.projects.length ?
+          '<div style="font-size:12px;color:var(--warning);margin-top:4px">🛠 Projects: ' + phase.projects.join(', ') + '</div>' : '') +
+      '</div>';
+    }).join('') +
+
+    (d.tips && d.tips.length ?
+      '<div class="card">' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:10px"><i class="fas fa-lightbulb" style="color:var(--warning)"></i> Pro Tips</div>' +
+        '<ul style="list-style:none">' + renderList(d.tips, 'lightbulb') + '</ul>' +
+      '</div>' : '');
+
+  document.getElementById('resultsArea').innerHTML = html;
+}
+</script>
+{% endblock %}
