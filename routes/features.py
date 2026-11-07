@@ -6,16 +6,28 @@ from functools import wraps
 
 import requests
 from bson import ObjectId
-from flask import (Blueprint, jsonify, redirect, render_template,
+from flask import (Blueprint, current_app, jsonify, redirect, render_template,
                    request, session, url_for)
 
 from extensions import mongo
 
 features_bp = Blueprint('features', __name__)
 
-MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY', '')
 MISTRAL_URL     = 'https://api.mistral.ai/v1/chat/completions'
 MODEL           = 'mistral-small-latest'
+
+
+class FeatureDependencyError(RuntimeError):
+    """Raised when an external service required by a feature is unavailable."""
+
+
+def _mistral_key():
+    return (current_app.config.get('MISTRAL_API_KEY') or os.getenv('MISTRAL_API_KEY', '')).strip()
+
+
+def _feature_error(exc):
+    status = 503 if isinstance(exc, FeatureDependencyError) else 500
+    return jsonify(success=False, error=str(exc)), status
 
 # ── PDF / DOCX parsers (optional imports) ────────────────────────────────────
 try:
@@ -43,8 +55,13 @@ def login_required(f):
 
 
 def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
+    api_key = _mistral_key()
+    if not api_key:
+        raise FeatureDependencyError(
+            'Mistral API is unavailable: MISTRAL_API_KEY is not configured.'
+        )
     headers = {
-        'Authorization': f'Bearer {MISTRAL_API_KEY}',
+        'Authorization': f'Bearer {api_key}',
         'Content-Type':  'application/json',
     }
     body = {
@@ -61,8 +78,13 @@ def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
 
 
 def mistral_convo(messages: list, max_tokens: int = 700) -> str:
+    api_key = _mistral_key()
+    if not api_key:
+        raise FeatureDependencyError(
+            'Mistral API is unavailable: MISTRAL_API_KEY is not configured.'
+        )
     headers = {
-        'Authorization': f'Bearer {MISTRAL_API_KEY}',
+        'Authorization': f'Bearer {api_key}',
         'Content-Type':  'application/json',
     }
     body = {'model': MODEL, 'max_tokens': max_tokens, 'messages': messages}
@@ -139,7 +161,7 @@ def api_placement_predictor():
                      f"Score: {parsed.get('overall_probability')}%")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 2. Skill Gap Analyzer ─────────────────────────────────────────────────────
@@ -180,7 +202,7 @@ def api_skill_gap():
                      f"Role: {d.get('target_role')}")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 3. AI Interview Simulator ─────────────────────────────────────────────────
@@ -216,7 +238,7 @@ def api_interview_start():
         session['interview_history'] = [{'role': 'assistant', 'content': intro}]
         return jsonify(success=True, message=intro)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 @features_bp.route('/api/interview/respond', methods=['POST'])
@@ -243,7 +265,7 @@ def api_interview_respond():
         session['interview_history'] = history
         return jsonify(success=True, message=reply, turn=len(history) // 2)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 @features_bp.route('/api/interview/end', methods=['POST'])
@@ -286,7 +308,7 @@ def api_interview_end():
                      f"Score: {parsed.get('overall_score')}")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 4. Resume File Upload (text extractor) ───────────────────────────────────
@@ -324,7 +346,7 @@ def api_resume_upload():
 
         return jsonify(success=True, text=text.strip())
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 4b. Resume ATS Scorer ──────────────────────────────────────────────────────
@@ -366,7 +388,7 @@ def api_resume_ats():
                      f"Score: {parsed.get('ats_score')}")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 5. Company Prediction Engine ──────────────────────────────────────────────
@@ -407,7 +429,7 @@ def api_company_predictor():
                      f"{len(parsed.get('recommendations', []))} companies found")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 6. Personalized Learning Path ────────────────────────────────────────────
@@ -455,7 +477,7 @@ def api_learning_path():
                      f"Role: {d.get('target_role')}")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 7. AI Project Evaluator ───────────────────────────────────────────────────
@@ -500,7 +522,7 @@ def api_project_evaluator():
                      f"{d.get('title')}: {parsed.get('overall_score')}/100")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 8. Placement Trend Analysis ───────────────────────────────────────────────
@@ -541,7 +563,7 @@ def api_trend_analysis():
                      f"Domain: {d.get('domain')}")
         return jsonify(success=True, data=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 9. AI Career Mentor (conversational) ─────────────────────────────────────
@@ -578,7 +600,7 @@ def api_career_mentor():
         reply = mistral_convo(messages, 700)
         return jsonify(success=True, message=reply)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 # ── 10. Aptitude & Reasoning Practice ────────────────────────────────────────
@@ -622,7 +644,7 @@ def api_aptitude_generate():
                      f"{category} – {diff} – {count} Qs")
         return jsonify(success=True, questions=parsed)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
 
 
 @features_bp.route('/api/aptitude/explain', methods=['POST'])
@@ -645,4 +667,4 @@ def api_aptitude_explain():
         reply = mistral(system, prompt, 400)
         return jsonify(success=True, explanation=reply)
     except Exception as exc:
-        return jsonify(success=False, error=str(exc))
+        return _feature_error(exc)
