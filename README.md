@@ -80,6 +80,16 @@ To run this application locally, ensure you have Python 3.9+ and MongoDB install
    MAIL_APP_PASSWORD=your_gmail_app_password
    MISTRAL_API_KEY=your_mistral_api_key
    ```
+   On Windows, copy `.env.example` to `.env`, then replace
+   `MISTRAL_API_KEY` with your own key from the Mistral console. Do not commit
+   `.env` or paste the key into source code. An empty key intentionally makes
+   AI endpoints return a clear `503` instead of sending an invalid request.
+   `MONGO_URI` and `MISTRAL_API_KEY` are validated at startup. If MongoDB is
+   unavailable, the app automatically uses a local file-backed store at
+   `data/placementai_fallback.json` (or set `FALLBACK_STORAGE_MODE=memory` for
+   ephemeral development). AI feature APIs return a clear `503` dependency
+   response until `MISTRAL_API_KEY` is configured. Check `/api/status` for the
+   current dependency state.
 
 5. **Run the Application!**
    ```bash

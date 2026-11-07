@@ -1,0 +1,24 @@
+{
+  "users": [
+    {
+      "email": "user@gmail.com",
+      "fullname": "ESWAR REDDY AMBATI",
+      "password": "$2b$12$Vw0iTjeanYuWD6QjKb5l0u6dmRcfpYfKXVqayWw/FmTDV5oOK.dKm",
+      "created_at": {
+        "__type__": "datetime",
+        "value": "2026-11-07T14:46:52.368624"
+      },
+      "skills": [],
+      "resume_score": null,
+      "target_companies": [],
+      "learning_path": [],
+      "interview_sessions": [],
+      "projects": [],
+      "placement_probability": 0,
+      "_id": {
+        "__type__": "objectid",
+        "value": "6aef39dca469c7ed6560fae6"
+      }
+    }
+  ]
+}
