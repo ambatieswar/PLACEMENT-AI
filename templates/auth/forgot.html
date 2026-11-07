@@ -75,6 +75,7 @@
     <!-- ── Step 1 : enter email ── -->
     {% if step == 1 %}
     <form method="POST" action="/forgot-password">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="step" value="1">
       <div class="form-group">
         <label class="form-label" for="email">Email Address</label>
@@ -96,6 +97,7 @@
     <!-- ── Step 2 : enter OTP ── -->
     {% elif step == 2 %}
     <form method="POST" action="/forgot-password" id="otpForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="step"  value="2">
       <input type="hidden" name="email" value="{{ email }}">
 
@@ -151,6 +153,7 @@
     <!-- ── Step 3 : new password ── -->
     {% elif step == 3 %}
     <form method="POST" action="/forgot-password">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="step"  value="3">
       <input type="hidden" name="email" value="{{ email }}">
       <input type="hidden" name="otp"   value="{{ otp }}">

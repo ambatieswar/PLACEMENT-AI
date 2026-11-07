@@ -14,6 +14,10 @@ from extensions import mongo
 features_bp = Blueprint('features', __name__)
 
 MISTRAL_URL     = 'https://api.mistral.ai/v1/chat/completions'
+GEMINI_URL      = (
+    'https://generativelanguage.googleapis.com/v1beta/models/'
+    'gemini-flash-lite-latest:generateContent'
+)
 MODEL           = 'mistral-small-latest'
 
 
@@ -22,12 +26,84 @@ class FeatureDependencyError(RuntimeError):
 
 
 def _mistral_key():
-    return (current_app.config.get('MISTRAL_API_KEY') or os.getenv('MISTRAL_API_KEY', '')).strip()
+    value = current_app.config.get('MISTRAL_API_KEY')
+    return (value if value is not None else os.getenv('MISTRAL_API_KEY', '')).strip()
+
+
+def _gemini_key():
+    value = current_app.config.get('GEMINI_API_KEY')
+    return (value if value is not None else os.getenv('GEMINI_API_KEY', '')).strip()
+
+
+def _ai_provider():
+    if _gemini_key():
+        return 'gemini'
+    if _mistral_key():
+        return 'mistral'
+    raise FeatureDependencyError(
+        'AI features are unavailable: configure GEMINI_API_KEY '
+        '(recommended free tier) or MISTRAL_API_KEY.'
+    )
+
+
+def _gemini(system: str, user: str, max_tokens: int) -> str:
+    prompt = f'{system}\n\nUser request:\n{user}'
+    response = requests.post(
+        GEMINI_URL,
+        params={'key': _gemini_key()},
+        json={
+            'systemInstruction': {'parts': [{'text': system}]},
+            'contents': [{'role': 'user', 'parts': [{'text': user}]}],
+            'generationConfig': {'maxOutputTokens': max_tokens},
+        },
+        timeout=45,
+    )
+    response.raise_for_status()
+    candidates = response.json().get('candidates', [])
+    if not candidates:
+        raise FeatureDependencyError('Gemini returned no generated content.')
+    return candidates[0]['content']['parts'][0]['text']
+
+
+def _gemini_convo(messages: list, max_tokens: int) -> str:
+    system_parts = [
+        message['content'] for message in messages
+        if message.get('role') == 'system'
+    ]
+    contents = [
+        {
+            'role': 'model' if message.get('role') == 'assistant' else 'user',
+            'parts': [{'text': message.get('content', '')}],
+        }
+        for message in messages
+        if message.get('role') != 'system'
+    ]
+    response = requests.post(
+        GEMINI_URL,
+        params={'key': _gemini_key()},
+        json={
+            'systemInstruction': {
+                'parts': [{'text': '\n\n'.join(system_parts)}]
+            },
+            'contents': contents,
+            'generationConfig': {'maxOutputTokens': max_tokens},
+        },
+        timeout=45,
+    )
+    response.raise_for_status()
+    candidates = response.json().get('candidates', [])
+    if not candidates:
+        raise FeatureDependencyError('Gemini returned no generated content.')
+    return candidates[0]['content']['parts'][0]['text']
 
 
 def _feature_error(exc):
     status = 503 if isinstance(exc, FeatureDependencyError) else 500
     return jsonify(success=False, error=str(exc)), status
+
+
+def _json_body():
+    return request.get_json(silent=True) or {}
 
 # ── PDF / DOCX parsers (optional imports) ────────────────────────────────────
 try:
@@ -55,11 +131,11 @@ def login_required(f):
 
 
 def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
+    if _ai_provider() == 'gemini':
+        return _gemini(system, user, max_tokens)
     api_key = _mistral_key()
     if not api_key:
-        raise FeatureDependencyError(
-            'Mistral API is unavailable: MISTRAL_API_KEY is not configured.'
-        )
+        raise FeatureDependencyError('MISTRAL_API_KEY is not configured.')
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type':  'application/json',
@@ -69,7 +145,7 @@ def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
         'max_tokens': max_tokens,
         'messages':   [
             {'role': 'system', 'content': system},
-            {'role': 'user',   'content': user},
+            {'role': 'user',   'content': user[:30000]},
         ],
     }
     resp = requests.post(MISTRAL_URL, headers=headers, json=body, timeout=45)
@@ -78,16 +154,23 @@ def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
 
 
 def mistral_convo(messages: list, max_tokens: int = 700) -> str:
+    if _ai_provider() == 'gemini':
+        return _gemini_convo(messages, max_tokens)
     api_key = _mistral_key()
     if not api_key:
-        raise FeatureDependencyError(
-            'Mistral API is unavailable: MISTRAL_API_KEY is not configured.'
-        )
+        raise FeatureDependencyError('MISTRAL_API_KEY is not configured.')
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type':  'application/json',
     }
-    body = {'model': MODEL, 'max_tokens': max_tokens, 'messages': messages}
+    body = {
+        'model': MODEL,
+        'max_tokens': max_tokens,
+        'messages': [
+            {**message, 'content': message.get('content', '')[:30000]}
+            for message in messages[-20:]
+        ],
+    }
     resp = requests.post(MISTRAL_URL, headers=headers, json=body, timeout=45)
     resp.raise_for_status()
     return resp.json()['choices'][0]['message']['content']
@@ -126,7 +209,7 @@ def placement_predictor():
 @features_bp.route('/api/placement-predictor', methods=['POST'])
 @login_required
 def api_placement_predictor():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a placement probability expert for Indian engineering students. "
         "Return ONLY a valid JSON object — no markdown, no extra text — with keys: "
@@ -175,7 +258,7 @@ def skill_gap():
 @features_bp.route('/api/skill-gap', methods=['POST'])
 @login_required
 def api_skill_gap():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a technical skill gap analyzer for software engineering placements. "
         "Return ONLY valid JSON with keys: gap_score (int 0-100, 100=no gap), "
@@ -216,7 +299,7 @@ def interview_simulator():
 @features_bp.route('/api/interview/start', methods=['POST'])
 @login_required
 def api_interview_start():
-    config = request.get_json(force=True)
+    config = _json_body()
     session['interview_config']  = config
     session['interview_history'] = []
 
@@ -244,7 +327,7 @@ def api_interview_start():
 @features_bp.route('/api/interview/respond', methods=['POST'])
 @login_required
 def api_interview_respond():
-    data    = request.get_json(force=True)
+    data    = _json_body()
     history = session.get('interview_history', [])
     config  = session.get('interview_config', {})
 
@@ -341,6 +424,7 @@ def api_resume_upload():
             # plain text / .txt
             text = raw_data.decode('utf-8', errors='replace')
 
+        text = text[:100000]
         if not text.strip():
             return jsonify(success=False, error='Could not extract text from file')
 
@@ -360,7 +444,7 @@ def resume_ats():
 @features_bp.route('/api/resume-ats', methods=['POST'])
 @login_required
 def api_resume_ats():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are an expert ATS (Applicant Tracking System) and resume evaluator. "
         "Return ONLY valid JSON with keys: ats_score (int 0-100), keyword_match_score, "
@@ -372,7 +456,7 @@ def api_resume_ats():
         "overall_verdict (Strong/Good/Average/Weak). No markdown."
     )
     prompt = (
-        f"Resume Content:\n{d.get('resume_text', '')}\n\n"
+        f"Resume Content:\n{str(d.get('resume_text', ''))[:30000]}\n\n"
         f"Job Description:\n{d.get('jd_text', 'Not provided')}"
     )
     try:
@@ -402,7 +486,7 @@ def company_predictor():
 @features_bp.route('/api/company-predictor', methods=['POST'])
 @login_required
 def api_company_predictor():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a company-fit prediction engine for tech placements in India. "
         "Return ONLY valid JSON with keys: "
@@ -443,7 +527,7 @@ def learning_path():
 @features_bp.route('/api/learning-path', methods=['POST'])
 @login_required
 def api_learning_path():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a personalized learning path generator for software engineering placements. "
         "Return ONLY valid JSON with keys: total_duration (string), "
@@ -491,7 +575,7 @@ def project_evaluator():
 @features_bp.route('/api/project-evaluator', methods=['POST'])
 @login_required
 def api_project_evaluator():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a technical project evaluator for placement interviews. "
         "Return ONLY valid JSON with keys: overall_score (int 0-100), "
@@ -536,7 +620,7 @@ def trend_analysis():
 @features_bp.route('/api/trend-analysis', methods=['POST'])
 @login_required
 def api_trend_analysis():
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are a tech industry placement trend analyst. "
         "Return ONLY valid JSON with keys: "
@@ -577,7 +661,7 @@ def career_mentor():
 @features_bp.route('/api/career-mentor', methods=['POST'])
 @login_required
 def api_career_mentor():
-    data         = request.get_json(force=True)
+    data         = _json_body()
     history      = data.get('history', [])
     user_message = data.get('message', '')
     user_goals   = data.get('user_goals', 'Get placed in a top tech company')
@@ -614,7 +698,7 @@ def aptitude():
 @features_bp.route('/api/aptitude/generate', methods=['POST'])
 @login_required
 def api_aptitude_generate():
-    d        = request.get_json(force=True)
+    d        = _json_body()
     category = d.get('category', 'Mixed')
     diff     = d.get('difficulty', 'Medium')
     count    = min(int(d.get('count', 10)), 20)
@@ -651,7 +735,7 @@ def api_aptitude_generate():
 @login_required
 def api_aptitude_explain():
     """Get a deeper AI explanation for a specific question."""
-    d = request.get_json(force=True)
+    d = _json_body()
     system = (
         "You are an expert aptitude tutor. Provide a thorough, student-friendly explanation "
         "for the following aptitude question. Include the approach, any formulas used, "

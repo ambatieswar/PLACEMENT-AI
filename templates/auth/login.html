@@ -96,6 +96,7 @@
       {% for cat, msg in messages %}<div class="alert alert-{{ cat }}"><i class="fas fa-info-circle"></i> {{ msg }}</div>{% endfor %}
     {% endwith %}
     <form method="POST" action="{{ url_for('auth.login') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field"><label for="email">Email address</label>
         <input type="email" id="email" name="email" placeholder="you@example.com" required autofocus autocomplete="email"></div>
       <div class="field"><label for="password">Password</label>

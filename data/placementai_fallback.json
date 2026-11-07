@@ -20,5 +20,20 @@
         "value": "6aef39dca469c7ed6560fae6"
       }
     }
+  ],
+  "activity": [
+    {
+      "user_id": "6aef39dca469c7ed6560fae6",
+      "action": "Skill Gap Analysis",
+      "detail": "Role: DATA SCIENTIST",
+      "created_at": {
+        "__type__": "datetime",
+        "value": "2026-11-07T16:16:19.605062"
+      },
+      "_id": {
+        "__type__": "objectid",
+        "value": "6aef4ed3c23bfc1d270585e6"
+      }
+    }
   ]
 }

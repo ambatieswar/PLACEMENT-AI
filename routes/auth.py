@@ -159,6 +159,11 @@ def forgot_password():
             new_pass  = request.form.get('new_password', '')
             confirm   = request.form.get('confirm_password', '')
 
+            record = get_db().otps.find_one({'email': email, 'otp': otp_input})
+            if not record or record['expires_at'] < datetime.utcnow():
+                flash('Invalid or expired OTP. Please start again.', 'danger')
+                return redirect(url_for('auth.forgot_password'))
+
             if new_pass != confirm:
                 flash('Passwords do not match.', 'danger')
                 return render_template('auth/forgot.html', step=3, email=email, otp=otp_input)

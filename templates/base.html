@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}PlacementAI{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -165,6 +166,10 @@
       display: flex; flex-direction: column;
       z-index: 100; overflow-y: auto;
     }
+    .menu-toggle {
+      display: none; border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+    }
     .sidebar-logo {
       padding: 20px 18px 16px;
       border-bottom: 1px solid var(--border-light);
@@ -284,6 +289,7 @@
 
     /* ── Responsive ── */
     @media (max-width: 900px) {
+      .menu-toggle { display: inline-flex; align-items: center; justify-content: center; }
       .sidebar { transform: translateX(-100%); transition: transform .25s ease; }
       .sidebar.open { transform: translateX(0); }
       .main-content { margin-left: 0; }
@@ -354,6 +360,10 @@
 <div class="main-content">
   <div class="topbar">
     <div>
+      <button class="menu-toggle" id="menuToggle" type="button"
+              aria-controls="sidebar" aria-expanded="false" aria-label="Open navigation">
+        <i class="fas fa-bars"></i>
+      </button>
       <div class="topbar-title">{% block page_title %}{% endblock %}</div>
       <div class="topbar-sub">{% block page_subtitle %}{% endblock %}</div>
     </div>
@@ -398,7 +408,10 @@
     try {
       const r = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+        },
         body: JSON.stringify(data),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -417,7 +430,7 @@
 
   /* ── Render tag pills ── */
   function renderTags(arr) {
-    return (arr || []).map(t => `<span class="tag">${t}</span>`).join('');
+    return (arr || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
   }
 
   /* ── Render a <ul> list with icon ── */
@@ -426,9 +439,44 @@
     return (arr || []).map(item => `
       <li style="display:flex;gap:8px;margin-bottom:8px;font-size:13px;align-items:flex-start">
         <i class="fas fa-${icon}" style="color:var(--primary);margin-top:3px;flex-shrink:0;font-size:11px"></i>
-        <span>${item}</span>
+        <span>${escapeHtml(item)}</span>
       </li>`).join('');
   }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function (char) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
+    });
+  }
+
+  (function () {
+    const originalFetch = window.fetch;
+    window.fetch = function (input, init) {
+      init = init || {};
+      const method = (init.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        const headers = new Headers(init.headers || {});
+        headers.set('X-CSRFToken', document.querySelector('meta[name="csrf-token"]').content);
+        init.headers = headers;
+      }
+      return originalFetch(input, init);
+    };
+    const toggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    if (toggle && sidebar) {
+      toggle.addEventListener('click', function () {
+        const open = sidebar.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+      });
+      sidebar.querySelectorAll('a').forEach(function (link) {
+        link.addEventListener('click', function () {
+          sidebar.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        });
+      });
+    }
+  })();
 
   /* ── Simple toast notification ── */
   function showToast(msg, type) {
