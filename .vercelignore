@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+data/*
+flask_session/*
+__pycache__/*
+.pytest_cache/*
+.venv/*
+tests/*
+.git/*
