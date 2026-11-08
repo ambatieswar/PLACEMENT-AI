@@ -105,6 +105,39 @@ def _feature_error(exc):
 def _json_body():
     return request.get_json(silent=True) or {}
 
+
+def _safe_count(value, default=10, maximum=20):
+    try:
+        return max(1, min(int(value), maximum))
+    except (TypeError, ValueError):
+        return default
+
+
+def _ai_text(system: str, user: str, max_tokens: int = 1500) -> str:
+    """Try Gemini first, then fall back to Mistral when needed."""
+    errors = []
+    if _gemini_key():
+        try:
+            return _gemini(system, user, max_tokens)
+        except (FeatureDependencyError, requests.RequestException) as exc:
+            errors.append(f'Gemini request failed: {exc.__class__.__name__}')
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            errors.append(f'Gemini response was invalid: {exc.__class__.__name__}')
+    if _mistral_key():
+        try:
+            return _mistral_request(system, user, max_tokens)
+        except (FeatureDependencyError, requests.RequestException) as exc:
+            errors.append(f'Mistral request failed: {exc.__class__.__name__}')
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            errors.append(f'Mistral response was invalid: {exc.__class__.__name__}')
+    if errors:
+        raise FeatureDependencyError('; '.join(errors))
+    raise FeatureDependencyError(
+        'AI features are unavailable: configure GEMINI_API_KEY '
+        '(recommended free tier) or MISTRAL_API_KEY.'
+    )
+
+
 # ── PDF / DOCX parsers (optional imports) ────────────────────────────────────
 try:
     import fitz  # PyMuPDF
@@ -133,6 +166,10 @@ def login_required(f):
 def mistral(system: str, user: str, max_tokens: int = 1500) -> str:
     if _ai_provider() == 'gemini':
         return _gemini(system, user, max_tokens)
+    return _mistral_request(system, user, max_tokens)
+
+
+def _mistral_request(system: str, user: str, max_tokens: int = 1500) -> str:
     api_key = _mistral_key()
     if not api_key:
         raise FeatureDependencyError('MISTRAL_API_KEY is not configured.')
@@ -232,10 +269,13 @@ def api_placement_predictor():
         f"Active Backlogs: {d.get('backlogs', 0)}"
     )
     try:
-        raw    = mistral(system, prompt, 1400)
+        raw = _ai_text(system, prompt, 1400)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         mongo.db.users.update_one(
             {'_id': ObjectId(session['user_id'])},
             {'$set': {'placement_probability': parsed.get('overall_probability', 0)}}
@@ -280,7 +320,10 @@ def api_skill_gap():
         raw    = mistral(system, prompt, 1600)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         log_activity(session['user_id'], 'Skill Gap Analysis',
                      f"Role: {d.get('target_role')}")
         return jsonify(success=True, data=parsed)
@@ -372,7 +415,10 @@ def api_interview_end():
         raw    = mistral(system, f"Transcript:\n{transcript}", 1400)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
 
         mongo.db.interview_sessions.insert_one({
             'user_id':    session['user_id'],
@@ -463,7 +509,10 @@ def api_resume_ats():
         raw    = mistral(system, prompt, 1600)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         mongo.db.users.update_one(
             {'_id': ObjectId(session['user_id'])},
             {'$set': {'resume_score': parsed.get('ats_score', 0)}}
@@ -508,7 +557,10 @@ def api_company_predictor():
         raw    = mistral(system, prompt, 1800)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         log_activity(session['user_id'], 'Company Prediction',
                      f"{len(parsed.get('recommendations', []))} companies found")
         return jsonify(success=True, data=parsed)
@@ -552,7 +604,10 @@ def api_learning_path():
         raw    = mistral(system, prompt, 2000)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         mongo.db.users.update_one(
             {'_id': ObjectId(session['user_id'])},
             {'$set': {'learning_path': parsed}}
@@ -601,7 +656,10 @@ def api_project_evaluator():
         raw    = mistral(system, prompt, 1600)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         log_activity(session['user_id'], 'Project Evaluated',
                      f"{d.get('title')}: {parsed.get('overall_score')}/100")
         return jsonify(success=True, data=parsed)
@@ -642,7 +700,10 @@ def api_trend_analysis():
         raw    = mistral(system, prompt, 1800)
         parsed = parse_json(raw)
         if not parsed:
-            return jsonify(success=False, error='JSON parse failed', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid JSON. Please try again.',
+            ), 502
         log_activity(session['user_id'], 'Trend Analysis',
                      f"Domain: {d.get('domain')}")
         return jsonify(success=True, data=parsed)
@@ -701,7 +762,7 @@ def api_aptitude_generate():
     d        = _json_body()
     category = d.get('category', 'Mixed')
     diff     = d.get('difficulty', 'Medium')
-    count    = min(int(d.get('count', 10)), 20)
+    count = _safe_count(d.get('count', 10))
 
     system = (
         "You are an expert aptitude and reasoning question setter for Indian engineering "
@@ -720,10 +781,13 @@ def api_aptitude_generate():
         "Make questions realistic and based on actual company placement patterns."
     )
     try:
-        raw    = mistral(system, prompt, 3000)
+        raw = _ai_text(system, prompt, 3000)
         parsed = parse_json(raw)
         if not parsed or not isinstance(parsed, list):
-            return jsonify(success=False, error='Failed to generate questions', raw=raw)
+            return jsonify(
+                success=False,
+                error='The AI provider returned invalid aptitude questions. Please try again.',
+            ), 502
         log_activity(session['user_id'], 'Aptitude Practice',
                      f"{category} – {diff} – {count} Qs")
         return jsonify(success=True, questions=parsed)

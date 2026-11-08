@@ -8,9 +8,21 @@ from extensions import mongo, mail, sess
 
 load_dotenv()
 
+
+def _config_value(name, default=''):
+    value = os.getenv(name, default)
+    if value is None:
+        return ''
+    value = str(value).strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value
+
+
 def create_app(config_override=None):
     app = Flask(__name__)
     is_vercel = bool(os.getenv('VERCEL'))
+    app.config['IS_VERCEL'] = is_vercel
 
     # ── Core config ──────────────────────────────────────────────────────────
     configured_secret = (
@@ -18,9 +30,9 @@ def create_app(config_override=None):
         or os.getenv('SECRET_KEY', '')
     ).strip()
     app.config['SECRET_KEY']          = configured_secret or 'development-only-secret'
-    app.config['MONGO_URI']           = os.getenv('MONGO_URI', '')
-    app.config['MISTRAL_API_KEY']     = os.getenv('MISTRAL_API_KEY', '')
-    app.config['GEMINI_API_KEY']      = os.getenv('GEMINI_API_KEY', '')
+    app.config['MONGO_URI']           = _config_value('MONGO_URI')
+    app.config['MISTRAL_API_KEY']     = _config_value('MISTRAL_API_KEY')
+    app.config['GEMINI_API_KEY']      = _config_value('GEMINI_API_KEY')
     app.config['FALLBACK_STORAGE_MODE'] = os.getenv(
         'FALLBACK_STORAGE_MODE',
         'memory' if is_vercel else 'file',
@@ -47,6 +59,15 @@ def create_app(config_override=None):
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
     if config_override:
         app.config.update(config_override)
+    for key in ('MONGO_URI', 'MISTRAL_API_KEY', 'GEMINI_API_KEY'):
+        value = app.config.get(key, '')
+        if value is None:
+            app.config[key] = ''
+        else:
+            value = str(value).strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1].strip()
+            app.config[key] = value
     configured_secret = app.config['SECRET_KEY'].strip()
 
     @app.context_processor

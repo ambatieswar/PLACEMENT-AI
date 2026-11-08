@@ -1,7 +1,7 @@
 from functools import wraps
 
 from bson import ObjectId
-from flask import (Blueprint, redirect, render_template, session, url_for)
+from flask import (Blueprint, flash, redirect, render_template, session, url_for)
 
 from extensions import mongo
 
@@ -21,6 +21,14 @@ def login_required(f):
 @login_required
 def home():
     user = mongo.db.users.find_one({'_id': ObjectId(session['user_id'])})
+    if user is None:
+        session.clear()
+        flash(
+            'Your session expired because persistent storage is not configured. '
+            'Please sign in again after MongoDB is connected.',
+            'warning',
+        )
+        return redirect(url_for('auth.login'))
 
     stats = {
         'resume_score':          user.get('resume_score', 0) or 0,

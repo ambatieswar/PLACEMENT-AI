@@ -131,11 +131,16 @@ class StorageExtension:
         self.reason = ""
 
     def init_app(self, app):
+        self.using_fallback = False
+        self.reason = ""
+        self._db = None
         uri = (app.config.get("MONGO_URI") or "").strip()
         if not uri:
             self._use_fallback(app, "MONGO_URI is not configured")
             return
         try:
+            if not uri.startswith(("mongodb://", "mongodb+srv://")):
+                raise ValueError("MONGO_URI must start with mongodb:// or mongodb+srv://")
             self._mongo.init_app(app)
             self._mongo.cx.admin.command("ping")
             self._db = self._mongo.db

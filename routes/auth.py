@@ -3,7 +3,7 @@ import string
 from datetime import datetime, timedelta
 
 import bcrypt
-from flask import (Blueprint, flash, redirect, render_template,
+from flask import (Blueprint, current_app, flash, redirect, render_template,
                    request, session, url_for)
 from flask_mail import Message
 
@@ -60,6 +60,14 @@ def signup():
         return redirect(url_for('dashboard.home'))
 
     if request.method == 'POST':
+        if current_app.config.get('IS_VERCEL') and mongo.using_fallback:
+            flash(
+                'Registration is temporarily unavailable because this deployment '
+                'needs a persistent MongoDB connection. Configure MONGO_URI first.',
+                'danger',
+            )
+            return render_template('auth/signup.html'), 503
+
         email    = request.form.get('email', '').strip().lower()
         fullname = request.form.get('fullname', '').strip()
         password = request.form.get('password', '')
